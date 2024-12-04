@@ -35,9 +35,29 @@ colnames(the.data) <- c("X1", "X2", "X3", "X4", "X5", "Y")
 
 num_row <- 450
 num_col <- 6
-num_samples <- nrow(the.data)
 
-my.data <- the.data[sample(1:num_samples, num_row), c(1:num_col)]
+# Filter out outliers from the dataset before sampling
+remove_outliers <- function(data) {
+  valid_rows <- rep(TRUE, nrow(data))
+  
+  for (col in 1:ncol(data)) {
+    q1 <- quantile(data[, col], 0.25)
+    q3 <- quantile(data[, col], 0.75)
+    iqr <- q3 - q1
+    
+    lower_bound <- q1 - 1.5 * iqr
+    upper_bound <- q3 + 1.5 * iqr
+    
+    valid_rows <- valid_rows & (data[, col] >= lower_bound & data[, col] <= upper_bound)
+  }
+  return (data[valid_rows, ])
+}
+
+filtered_data <- remove_outliers(the.data)
+num_samples <- nrow(filtered_data)
+
+# Sample the data to have 450 rows
+my.data <- filtered_data[sample(1:num_samples, num_row), c(1:num_col)]
 
 # assert that we have no missing values
 stopifnot(is.na(my.data) == FALSE)
@@ -110,12 +130,6 @@ histogram <- function(data,   # The data matrix
                       xlabel, # X-axis label
                       title   # Title of the graph
                       ) {
-  rounding = 2
-  mean <- round(mean(data), rounding)
-  median <- round(median(data), rounding)
-  min <- round(min(data), rounding)
-  max <- round(max(data), rounding)
-  
   hist(data, xlab = xlabel, main=title, col="lightblue")
 }
 
@@ -134,8 +148,7 @@ generate_statistical_checks <- function(data,           # The data matrix
     # QQ Plot
     print(paste("Col name: ", col_name))
     df <- as.data.frame(data)
-    plot <-ggplot(df, aes(sample = !!sym(col_name)))+stat_qq()+stat_qq_line(color = "red")+theme_minimal()  
-      labs(title = paste("Q-Q Plot of", data_process_level, label),
+    plot <-ggplot(df, aes(sample = !!sym(col_name)))+stat_qq()+stat_qq_line(color = "red")+theme_minimal()+labs(title = paste("Q-Q Plot of", data_process_level, label),
            x = "Theoretical Quantiles",
            y = "Sample Quantiles")
     print(plot)
@@ -173,27 +186,74 @@ corrplot(cor_matrix, method = "circle", addCoef.col = 'black')
 # T2 - Transform the data
 ################################################################################
 
-# Drop the X4 (office room humidity) feature as it has the lowest correlations 
-# to target
+# Drop the X5 (pressure) feature as it has the lowest correlations 
+# to target (0.04 pearson's coefficient)
 # TODO confirm other measures of selection
-my.data <- my.data[, colnames(my.data) != or_humidity_col_name]
+# TODO tests for monotonicity
+my.data <- my.data[, colnames(my.data) != pressure_col_name]
 stopifnot(ncol(my.data) == 5) # assert that we now have 5 columns
+
+# Generate statistical descriptives of mean and standard variation for 
+# our 4 features and 1 target for use in zscore calculation
+# and also for inference
+generate_std_and_mean <- function(data, # the data matrix
+                                  col_names # array of column names
+) {
+  result_list <- list()
+  for (col_name in col_names) {
+    stats <- list(
+      std = sd(data[, col_name]),
+      mean = mean(data[, col_name])
+    )
+    result_list[[col_name]] = stats
+  }
+  result_list
+}
+
+# Calculate the zscore for a particular column
+unit_zscore <- function(data,
+                        col_name,
+                        std_and_means) {
+  0.15 * ((data - std_and_means[[col_name]][["mean"]]) / std_and_means[[col_name]][["std"]]) + 0.5
+}
 
 
 # Function to transform the matrix data
-# input: data - a data matrix with 5 columns (the last being the target)
-transform_data <- function(data) {
-  local_data_copy <- data # make a copy of the matrix
-  local_data_copy[, lr_temp_col_name] <- log(local_data_copy[, lr_temp_col_name])
-  local_data_copy[, lr_humidity_col_name] <- local_data_copy[, lr_humidity_col_name] ^ (1/2)
-  # No transformation on or_temp_col_name as the distribution is normal
-  local_data_copy[, pressure_col_name] <- local_data_copy[, pressure_col_name] ^ (1/2)
-  local_data_copy[, target_col_name] <- local_data_copy[, target_col_name] ^ 2
-  local_data_copy
+# arg: data - a data matrix with 5 columns (the last being the target)
+
+apply_distribution_transforms <- function(data) {
+  data[, lr_temp_col_name] <- 1 / (data[, lr_temp_col_name])
+  data[, or_humidity_col_name] <- 1 / (data[, or_humidity_col_name] + 0.001) 
+  data[, target_col_name] <- log(data[, target_col_name])
+  data
+  
 }
 
-# Transform the input matrix
-transformed.data <- transform_data(my.data)
+# Apply unit zscore transformation to all columns / target
+# arg: data - a matrix containing the dataset
+# arg: std_and_means - a list of lists of the standard deviation and mean for 
+#  the dataset for each  feature / target
+apply_unit_zscore_transforms <- function(data,
+                                         std_and_means) {
+  data[, lr_temp_col_name] <- unit_zscore(data[, lr_temp_col_name], lr_temp_col_name, std_and_means)
+  data[, lr_humidity_col_name] <- unit_zscore(data[, lr_humidity_col_name], lr_humidity_col_name, std_and_means)
+  data[, or_temp_col_name] <- unit_zscore(data[, or_temp_col_name], or_temp_col_name, std_and_means)
+  data[, or_humidity_col_name] <- unit_zscore(data[, or_humidity_col_name], or_humidity_col_name, std_and_means)
+  data[, target_col_name] <- unit_zscore(data[, target_col_name], target_col_name, std_and_means)
+  data
+}
+
+# Transform the data
+transformed.data <- apply_distribution_transforms(my.data)
+std_and_means <- generate_std_and_mean(transformed.data, 
+                                       c(lr_temp_col_name,
+                                         lr_humidity_col_name,
+                                         or_temp_col_name,
+                                         or_humidity_col_name,
+                                         target_col_name)) 
+transformed.data <- apply_unit_zscore_transforms(transformed.data, std_and_means)
+
+
 
 # graph transformed data
 # print pre transformed raw graphs of variables
@@ -201,7 +261,7 @@ post_transform_args <- matrix(
   c(lr_temp_col_name, living_room_temperature, " Transformed ",
     lr_humidity_col_name, living_room_humidity, " Transformed ",
     or_temp_col_name, office_room_temperature, " Transformed ",
-    pressure_col_name, pressure, " Transformed ",
+    or_humidity_col_name, office_room_humidity, " Transformed ",
     target_col_name, target, " Transformed "
   ),
   ncol=3, byrow = TRUE
@@ -209,16 +269,45 @@ post_transform_args <- matrix(
 
 generate_statistical_checks(transformed.data, post_transform_args)
 
-# We need to store the training data mean and standard deviation for later 
-# scaling of inputs during inference
-training_data_means <- matrix(
-  c(
-    mean(transformed.data[, lr_temp_col_name]),
-    mean(transformed.data[, lr_humidity_col_name]),
-    mean(transformed.data[, or_temp_col_name]),
-    mean(transformed.data[, pressure_col_name]),
-    mean(transformed.data[, target_col_name]),
-    ncol=5, byrow = TRUE
-  )
+# Save the transformed data 
+write.table(transformed.data, "name-transformed.txt")
+
+################################################################################
+# T3 - Model Construction
+################################################################################
+
+# (i) Load library
+source("AggWaFit718.R")
+
+# (ii) a - Weighted Arithmetic Mean
+fit.QAM(
+  transformed.data,
+  output.1 = "wam_results.txt",
+  stats.1 = "wam_statistics.txt"
+)
+
+# (ii) b - Weighted power means using p = 0.5
+fit.QAM(
+  transformed.data,
+  output.1 = "wpm_p0.5_results.txt",
+  stats.1 = "wpm_p0.5_statistics.txt",
+  g = PM05,
+  g.inv = invPM05
+)
+
+## (ii) c - Weighted power means using p = 2
+fit.QAM(
+  transformed.data,
+  output.1 = "wpm_p2_results.txt",
+  stats.1 = "wpm_p2_statistics.txt",
+  g = QM,
+  g.inv = invQM
+)
+
+## (ii) d - Ordered Weighted Averaging function
+fit.OWA(
+  transformed.data,
+  output.1 = "owa_results.txt",
+  stats.1 = "owa_statistics.txt"
 )
 
