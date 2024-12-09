@@ -186,11 +186,9 @@ corrplot(cor_matrix, method = "circle", addCoef.col = 'black')
 # T2 - Transform the data
 ################################################################################
 
-# Drop the X5 (pressure) feature as it has the lowest correlations 
-# to target (0.04 pearson's coefficient)
-# TODO confirm other measures of selection
-# TODO tests for monotonicity
-my.data <- my.data[, colnames(my.data) != pressure_col_name]
+# Drop column we are not interested in
+drop_col_name = lr_temp_col_name
+my.data <- my.data[, colnames(my.data) != drop_col_name]
 stopifnot(ncol(my.data) == 5) # assert that we now have 5 columns
 
 # Generate statistical descriptives of mean and standard variation for 
@@ -220,11 +218,15 @@ unit_zscore <- function(data,
 
 # Function to transform the matrix data
 # arg: data - a data matrix with 5 columns (the last being the target)
-
-apply_distribution_transforms <- function(data) {
-  data[, lr_temp_col_name] <- 1 / (data[, lr_temp_col_name])
-  data[, or_humidity_col_name] <- 1 / (data[, or_humidity_col_name] + 0.001) 
-  data[, target_col_name] <- log(data[, target_col_name])
+# arg: apply_to_target - apply transform target or not
+apply_distribution_transforms <- function(data,
+                                          apply_to_target=TRUE) {
+  #data[, lr_temp_col_name] <- 1 / (data[, lr_temp_col_name])
+  data[, or_humidity_col_name] <- 1 / (data[, or_humidity_col_name] + 0.001) # constant added to avoid division by zero
+  data[, pressure_col_name] <- (data[, pressure_col_name])^3.5
+  if (apply_to_target) {
+    data[, target_col_name] <- log(data[, target_col_name])
+  }
   data
   
 }
@@ -233,23 +235,30 @@ apply_distribution_transforms <- function(data) {
 # arg: data - a matrix containing the dataset
 # arg: std_and_means - a list of lists of the standard deviation and mean for 
 #  the dataset for each  feature / target
+# arg: apply_to_target - apply transform target or not
 apply_unit_zscore_transforms <- function(data,
-                                         std_and_means) {
-  data[, lr_temp_col_name] <- unit_zscore(data[, lr_temp_col_name], lr_temp_col_name, std_and_means)
+                                         std_and_means,
+                                         apply_to_target=TRUE) {
+  #data[, lr_temp_col_name] <- unit_zscore(data[, lr_temp_col_name], lr_temp_col_name, std_and_means)
   data[, lr_humidity_col_name] <- unit_zscore(data[, lr_humidity_col_name], lr_humidity_col_name, std_and_means)
   data[, or_temp_col_name] <- unit_zscore(data[, or_temp_col_name], or_temp_col_name, std_and_means)
   data[, or_humidity_col_name] <- unit_zscore(data[, or_humidity_col_name], or_humidity_col_name, std_and_means)
-  data[, target_col_name] <- unit_zscore(data[, target_col_name], target_col_name, std_and_means)
+  data[, pressure_col_name] <- unit_zscore(data[, pressure_col_name], pressure_col_name, std_and_means)
+  if (apply_to_target) {
+    data[, target_col_name] <- unit_zscore(data[, target_col_name], target_col_name, std_and_means)
+  }
   data
 }
 
 # Transform the data
 transformed.data <- apply_distribution_transforms(my.data)
 std_and_means <- generate_std_and_mean(transformed.data, 
-                                       c(lr_temp_col_name,
+                                       c(
+                                         #lr_temp_col_name,
                                          lr_humidity_col_name,
                                          or_temp_col_name,
                                          or_humidity_col_name,
+                                         pressure_col_name,
                                          target_col_name)) 
 transformed.data <- apply_unit_zscore_transforms(transformed.data, std_and_means)
 
@@ -258,10 +267,12 @@ transformed.data <- apply_unit_zscore_transforms(transformed.data, std_and_means
 # graph transformed data
 # print pre transformed raw graphs of variables
 post_transform_args <- matrix(
-  c(lr_temp_col_name, living_room_temperature, " Transformed ",
+  c(
+    #lr_temp_col_name, living_room_temperature, " Transformed ",
     lr_humidity_col_name, living_room_humidity, " Transformed ",
     or_temp_col_name, office_room_temperature, " Transformed ",
     or_humidity_col_name, office_room_humidity, " Transformed ",
+    pressure_col_name, pressure, " Transformed ",
     target_col_name, target, " Transformed "
   ),
   ncol=3, byrow = TRUE
@@ -311,3 +322,46 @@ fit.OWA(
   stats.1 = "owa_statistics.txt"
 )
 
+################################################################################
+# T4 - Model Prediction
+################################################################################
+
+# Manually define the matrix from the data in the assignment specification sheet
+inference_matrix <- matrix(
+  c(19.1, 43.29, 19.7, 43.4, 743.6),
+  ncol=5, byrow = TRUE
+)
+colnames(inference_matrix) <- c(lr_temp_col_name,
+                                lr_humidity_col_name,
+                                or_temp_col_name,
+                                or_humidity_col_name,
+                                pressure_col_name)
+
+print(inference_matrix)
+print(is.matrix(inference_matrix))
+
+
+# Drop the column we have decided not to use
+inference_matrix <- inference_matrix[, colnames(inference_matrix) != drop_col_name, drop=FALSE]
+stopifnot(ncol(inference_matrix) == 4) # assert that we now have 4 columns
+
+# Transform the inference_matrix using the same transformations as the training data
+inference_matrix <- apply_distribution_transforms(inference_matrix, apply_to_target=FALSE)
+inference_matrix <- apply_unit_zscore_transforms(inference_matrix, std_and_means, apply_to_target=FALSE)
+
+# Define the weights learnt via training of the Weighted Average Model
+weights <- c(0.145113752792045,
+             0.351562163999998,
+             0.349343633342744,
+             0.153980449865216)
+
+# Use the Weighted Average Model to make the prediction
+target_prediction_scaled <- QAM(inference_matrix, weights)
+
+print(target_prediction_scaled)
+
+# We have a target prediction but it is log transformed and scaled. We need to reverse this
+target_prediciton = exp((std_and_means[[target_col_name]][["std"]] * (target_prediction_scaled - 0.5) / 0.15) 
+                        + std_and_means[[target_col_name]][["mean"]])
+
+print(target_prediciton)
