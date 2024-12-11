@@ -14,14 +14,15 @@
 # NECESSARY LIBRARIES (will require installation of packages) #
 ###############################################################
 
-library(lpSolve)
+library(lpSolve) # (Csárdi and Berkelaar, 2024)
 #library(scatterplot3d)
 
-library(pastecs) # For descriptive statistics (for stat.desc)
-library(car) # For qqPlot
-library(ggplot2) # ggplot
-library(knitr) # matrix printing
-library(corrplot) # correlation matrix plotting
+library(pastecs) # For descriptive statistics (for stat.desc) (Grosjean et al, 2024)
+library(car) # dependency for ggplot2 (Fox et al, 2024)
+library(ggplot2) # graph plotting library (Wickham et al., 2024)
+library(knitr) # matrix printing (Xie et al., 2024)
+library(corrplot) # correlation matrix plotting (Wei et al., 2024)
+library(MonoInc) # library for testing monotonicity (Minto et al., 2024)
 
 # Set seed as student id
 set.seed(225065259)
@@ -496,6 +497,9 @@ colnames(the.data) <- c("X1", "X2", "X3", "X4", "X5", "Y")
 num_row <- 450
 num_col <- 6
 
+# Print the row count before applying any filtering
+print(paste("Dataset row count before filtering: ", nrow(the.data)))
+
 # Filter out outliers from the dataset before sampling
 remove_outliers <- function(data) {
   valid_rows <- rep(TRUE, nrow(data))
@@ -514,6 +518,10 @@ remove_outliers <- function(data) {
 }
 
 filtered_data <- remove_outliers(the.data)
+
+# Print the number of rows after removal of outliers
+print(paste("Dataset row count after filtering: ", nrow(filtered_data)))
+
 num_samples <- nrow(filtered_data)
 
 # Sample the data to have 450 rows
@@ -521,6 +529,9 @@ my.data <- filtered_data[sample(1:num_samples, num_row), c(1:num_col)]
 
 # assert that we have no missing values
 stopifnot(is.na(my.data) == FALSE)
+
+# assert that we have no duplicates
+stopifnot(nrow(my.data) == nrow(unique(my.data)))
 
 ################################################################################
 # T1 (iv) - Generate scatter plots and histograms
@@ -593,6 +604,7 @@ histogram <- function(data,   # The data matrix
   hist(data, xlab = xlabel, main=title, col="lightblue")
 }
 
+
 generate_statistical_checks <- function(data,           # The data matrix
                                         argument_matrix # matrix to hold args
                             ) {
@@ -620,6 +632,7 @@ generate_statistical_checks <- function(data,           # The data matrix
     print("----------------------------")
     print(kable(desc))
     print("----------------------------")
+  
   }
 }
 
@@ -641,6 +654,19 @@ generate_statistical_checks(my.data, pre_transform_args)
 cor_matrix <- cor(my.data) 
 corrplot(cor_matrix, method = "circle", addCoef.col = 'black')
 
+# Check if variables are monotonically increasing
+test_monoic <- function(data, x_id, y_id) {
+  result <- monotonic(data, id.col=x_id, y.col=y_id, direction="inc")
+  print(paste("Monotonicity increasing test for ", x_id))
+  table(as.logical(result[,2]))
+}
+
+test_monoic(filtered_data, lr_temp_col_name, target_col_name)
+test_monoic(filtered_data, lr_humidity_col_name, target_col_name)
+test_monoic(filtered_data, or_temp_col_name, target_col_name)
+test_monoic(filtered_data, or_humidity_col_name, target_col_name)
+test_monoic(filtered_data, pressure_col_name, target_col_name)
+
 
 ################################################################################
 # T2 - Transform the data
@@ -654,14 +680,16 @@ stopifnot(ncol(my.data) == 5) # assert that we now have 5 columns
 # Generate statistical descriptives of mean and standard variation for 
 # our 4 features and 1 target for use in zscore calculation
 # and also for inference
-generate_std_and_mean <- function(data, # the data matrix
+generate_feature_stats <- function(data, # the data matrix
                                   col_names # array of column names
 ) {
   result_list <- list()
   for (col_name in col_names) {
     stats <- list(
       std = sd(data[, col_name]),
-      mean = mean(data[, col_name])
+      mean = mean(data[, col_name]),
+      min = min(data[, col_name]),
+      max = max(data[, col_name])
     )
     result_list[[col_name]] = stats
   }
@@ -671,19 +699,21 @@ generate_std_and_mean <- function(data, # the data matrix
 # Calculate the zscore for a particular column
 unit_zscore <- function(data,
                         col_name,
-                        std_and_means) {
-  0.15 * ((data - std_and_means[[col_name]][["mean"]]) / std_and_means[[col_name]][["std"]]) + 0.5
+                        feature_stats) {
+  0.15 * ((data - feature_stats[[col_name]][["mean"]]) / feature_stats[[col_name]][["std"]]) + 0.5
 }
 
 
 # Function to transform the matrix data
 # arg: data - a data matrix with 5 columns (the last being the target)
+# arg: feature_stats - descriptive statistics for features
 # arg: apply_to_target - apply transform target or not
 apply_distribution_transforms <- function(data,
+                                          feature_stats,
                                           apply_to_target=TRUE) {
   #data[, lr_temp_col_name] <- 1 / (data[, lr_temp_col_name])
   data[, or_humidity_col_name] <- 1 / (data[, or_humidity_col_name] + 0.001) # constant added to avoid division by zero
-  data[, pressure_col_name] <- (data[, pressure_col_name])^3.5
+  data[, pressure_col_name] <- (log(log(feature_stats[[pressure_col_name]][["max"]] + feature_stats[[pressure_col_name]][["min"]] - (data[, pressure_col_name]))))
   if (apply_to_target) {
     data[, target_col_name] <- log(data[, target_col_name])
   }
@@ -693,36 +723,54 @@ apply_distribution_transforms <- function(data,
 
 # Apply unit zscore transformation to all columns / target
 # arg: data - a matrix containing the dataset
-# arg: std_and_means - a list of lists of the standard deviation and mean for 
+# arg: feature_stats - a list of lists of the standard deviation and mean for 
 #  the dataset for each  feature / target
 # arg: apply_to_target - apply transform target or not
 apply_unit_zscore_transforms <- function(data,
-                                         std_and_means,
+                                         feature_stats,
                                          apply_to_target=TRUE) {
-  #data[, lr_temp_col_name] <- unit_zscore(data[, lr_temp_col_name], lr_temp_col_name, std_and_means)
-  data[, lr_humidity_col_name] <- unit_zscore(data[, lr_humidity_col_name], lr_humidity_col_name, std_and_means)
-  data[, or_temp_col_name] <- unit_zscore(data[, or_temp_col_name], or_temp_col_name, std_and_means)
-  data[, or_humidity_col_name] <- unit_zscore(data[, or_humidity_col_name], or_humidity_col_name, std_and_means)
-  data[, pressure_col_name] <- unit_zscore(data[, pressure_col_name], pressure_col_name, std_and_means)
+  #data[, lr_temp_col_name] <- unit_zscore(data[, lr_temp_col_name], lr_temp_col_name, feature_stats)
+  data[, lr_humidity_col_name] <- unit_zscore(data[, lr_humidity_col_name], lr_humidity_col_name, feature_stats)
+  data[, or_temp_col_name] <- unit_zscore(data[, or_temp_col_name], or_temp_col_name, feature_stats)
+  data[, or_humidity_col_name] <- unit_zscore(data[, or_humidity_col_name], or_humidity_col_name, feature_stats)
+  data[, pressure_col_name] <- unit_zscore(data[, pressure_col_name], pressure_col_name, feature_stats)
   if (apply_to_target) {
-    data[, target_col_name] <- unit_zscore(data[, target_col_name], target_col_name, std_and_means)
+    data[, target_col_name] <- unit_zscore(data[, target_col_name], target_col_name, feature_stats)
   }
   data
 }
 
 # Transform the data
-transformed.data <- apply_distribution_transforms(my.data)
-std_and_means <- generate_std_and_mean(transformed.data, 
+raw_feature_stats <- generate_feature_stats(filtered_data, 
                                        c(
                                          #lr_temp_col_name,
                                          lr_humidity_col_name,
                                          or_temp_col_name,
                                          or_humidity_col_name,
                                          pressure_col_name,
-                                         target_col_name)) 
-transformed.data <- apply_unit_zscore_transforms(transformed.data, std_and_means)
+                                         target_col_name))
 
+transformed.data <- apply_distribution_transforms(my.data, raw_feature_stats)
 
+transformed_feature_stats <- generate_feature_stats(transformed.data, 
+                                            c(
+                                              #lr_temp_col_name,
+                                              lr_humidity_col_name,
+                                              or_temp_col_name,
+                                              or_humidity_col_name,
+                                              pressure_col_name,
+                                              target_col_name))
+
+transformed.data <- apply_unit_zscore_transforms(transformed.data, transformed_feature_stats)
+
+scaled_feature_stats <- generate_feature_stats(transformed.data, 
+                                               c(
+                                                 #lr_temp_col_name,
+                                                 lr_humidity_col_name,
+                                                 or_temp_col_name,
+                                                 or_humidity_col_name,
+                                                 pressure_col_name,
+                                                 target_col_name))
 
 # graph transformed data
 # print pre transformed raw graphs of variables
@@ -740,8 +788,30 @@ post_transform_args <- matrix(
 
 generate_statistical_checks(transformed.data, post_transform_args)
 
+# Check monotonically increasing after transformations
+#test_monoic(transformed.data, lr_temp_col_name, target_col_name)
+test_monoic(transformed.data, lr_humidity_col_name, target_col_name)
+test_monoic(transformed.data, or_temp_col_name, target_col_name)
+test_monoic(transformed.data, or_humidity_col_name, target_col_name)
+test_monoic(transformed.data, pressure_col_name, target_col_name)
+
 # Save the transformed data 
 write.table(transformed.data, "name-transformed.txt")
+
+# print raw descriptive stats
+print("Raw descriptive stats")
+print("---------------------")
+print(raw_feature_stats)
+
+# print transformed descriptive stats
+print("Transformed descriptive stats")
+print("-----------------------------")
+print(transformed_feature_stats)
+
+# print scaled descriptive stats
+print("Scaled descriptive stats")
+print("-----------------------------")
+print(scaled_feature_stats)
 
 ################################################################################
 # T3 - Model Construction
@@ -803,14 +873,20 @@ inference_matrix <- inference_matrix[, colnames(inference_matrix) != drop_col_na
 stopifnot(ncol(inference_matrix) == 4) # assert that we now have 4 columns
 
 # Transform the inference_matrix using the same transformations as the training data
-inference_matrix <- apply_distribution_transforms(inference_matrix, apply_to_target=FALSE)
-inference_matrix <- apply_unit_zscore_transforms(inference_matrix, std_and_means, apply_to_target=FALSE)
+inference_matrix <- apply_distribution_transforms(inference_matrix, raw_feature_stats, apply_to_target=FALSE)
+inference_matrix <- apply_unit_zscore_transforms(inference_matrix, transformed_feature_stats, apply_to_target=FALSE)
+
+# Read the WAM weights from the file
+wam_stats <- read.table("wam_statistics.txt", skip=5)
 
 # Define the weights learnt via training of the Weighted Average Model
-weights <- c(0.145113752792045,
-             0.351562163999998,
-             0.349343633342744,
-             0.153980449865216)
+weights <- c(wam_stats$V2[wam_stats$V1 == 1],
+             wam_stats$V2[wam_stats$V1 == 2],
+             wam_stats$V2[wam_stats$V1 == 3],
+             wam_stats$V2[wam_stats$V1 == 4])
+
+print("Model Weights:")
+print(weights)
 
 # Use the Weighted Average Model to make the prediction
 target_prediction_scaled <- QAM(inference_matrix, weights)
@@ -818,7 +894,7 @@ target_prediction_scaled <- QAM(inference_matrix, weights)
 print(target_prediction_scaled)
 
 # We have a target prediction but it is log transformed and scaled. We need to reverse this
-target_prediciton = exp((std_and_means[[target_col_name]][["std"]] * (target_prediction_scaled - 0.5) / 0.15) 
-                        + std_and_means[[target_col_name]][["mean"]])
+target_prediciton = exp((transformed_feature_stats[[target_col_name]][["std"]] * (target_prediction_scaled - 0.5) / 0.15) 
+                        + transformed_feature_stats[[target_col_name]][["mean"]])
 
 print(target_prediciton)
