@@ -741,36 +741,23 @@ apply_unit_zscore_transforms <- function(data,
 }
 
 # Transform the data
-raw_feature_stats <- generate_feature_stats(filtered_data, 
-                                       c(
-                                         #lr_temp_col_name,
-                                         lr_humidity_col_name,
-                                         or_temp_col_name,
-                                         or_humidity_col_name,
-                                         pressure_col_name,
-                                         target_col_name))
+valid_features <- c(
+                    #lr_temp_col_name,
+                    lr_humidity_col_name,
+                    or_temp_col_name,
+                    or_humidity_col_name,
+                    pressure_col_name,
+                    target_col_name)
+
+raw_feature_stats <- generate_feature_stats(filtered_data, valid_features)
 
 transformed.data <- apply_distribution_transforms(my.data, raw_feature_stats)
 
-transformed_feature_stats <- generate_feature_stats(transformed.data, 
-                                            c(
-                                              #lr_temp_col_name,
-                                              lr_humidity_col_name,
-                                              or_temp_col_name,
-                                              or_humidity_col_name,
-                                              pressure_col_name,
-                                              target_col_name))
+transformed_feature_stats <- generate_feature_stats(transformed.data, valid_features)
 
 transformed.data <- apply_unit_zscore_transforms(transformed.data, transformed_feature_stats)
 
-scaled_feature_stats <- generate_feature_stats(transformed.data, 
-                                               c(
-                                                 #lr_temp_col_name,
-                                                 lr_humidity_col_name,
-                                                 or_temp_col_name,
-                                                 or_humidity_col_name,
-                                                 pressure_col_name,
-                                                 target_col_name))
+scaled_feature_stats <- generate_feature_stats(transformed.data, valid_features)
 
 # graph transformed data
 # print pre transformed raw graphs of variables
@@ -876,7 +863,8 @@ stopifnot(ncol(inference_matrix) == 4) # assert that we now have 4 columns
 inference_matrix <- apply_distribution_transforms(inference_matrix, raw_feature_stats, apply_to_target=FALSE)
 inference_matrix <- apply_unit_zscore_transforms(inference_matrix, transformed_feature_stats, apply_to_target=FALSE)
 
-# Read the WAM weights from the file
+# Read the WAM weights from the file as we have previously determined this as the best
+# performing model to use 
 wam_stats <- read.table("wam_statistics.txt", skip=5)
 
 # Define the weights learnt via training of the Weighted Average Model
@@ -894,7 +882,10 @@ target_prediction_scaled <- QAM(inference_matrix, weights)
 print(target_prediction_scaled)
 
 # We have a target prediction but it is log transformed and scaled. We need to reverse this
-target_prediciton = exp((transformed_feature_stats[[target_col_name]][["std"]] * (target_prediction_scaled - 0.5) / 0.15) 
-                        + transformed_feature_stats[[target_col_name]][["mean"]])
+target_reverse_transformation <- function(value) {
+  exp((transformed_feature_stats[[target_col_name]][["std"]] * (value - 0.5) / 0.15) 
+      + transformed_feature_stats[[target_col_name]][["mean"]])
+}
+target_prediciton = target_reverse_transformation(target_prediction_scaled)
 
 print(target_prediciton)
