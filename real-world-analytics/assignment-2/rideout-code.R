@@ -14,9 +14,7 @@
 # NECESSARY LIBRARIES (will require installation of packages) #
 ###############################################################
 
-library(lpSolve) # (Csárdi and Berkelaar, 2024)
-#library(scatterplot3d)
-
+library(lpSolve) # linear problem solver # (Csárdi and Berkelaar, 2024)
 library(pastecs) # For descriptive statistics (for stat.desc) (Grosjean et al, 2024)
 library(car) # dependency for ggplot2 (Fox et al, 2024)
 library(ggplot2) # graph plotting library (Wickham et al., 2024)
