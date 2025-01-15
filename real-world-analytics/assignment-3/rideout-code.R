@@ -3,6 +3,9 @@
 # Stduent Id: 225065259
 #######################
 
+##################################################################
+# Assessment 3 Question 2 Implementation
+##################################################################
 
 library(lpSolveAPI)
 
@@ -51,9 +54,8 @@ set.bounds(lpmodel, lower = rep(0, 9), upper = rep(Inf, 9))
 # Solve the LP model
 solve(lpmodel)
 
-
-objvalue <- get.objective(lpmodel)
-objvalue
+profit <- get.objective(lpmodel)
+profit
 
 solution <- get.variables(lpmodel)
 solution 
@@ -61,5 +63,104 @@ solution
 spring <- sum(solution[c(1,4,7)])
 autumn <- sum(solution[c(2,5,8)])
 winter <- sum(solution[c(3,6,9)])
+print("----------------------------------------------------------")
+print("Assessement 3 Question 2 Result")
+print(paste("Maximised profit: ", profit))
 print(paste("Spring tonnage: ", spring, " Autum tonnage: ", autumn, " Winter tonnage: ", winter))
+print("----------------------------------------------------------")
 
+
+##################################################################
+# Assessment 3 Question 3 Implementation
+##################################################################
+
+#############################
+# Player 1 Game 
+#############################
+
+library(lpSolveAPI)
+
+# Make the game model
+lp_game_player_one <- make.lp(0, 7)
+
+# Set the objective to maximize
+lp.control(lp_game_player_one, sense="maximize")
+
+# Set the objective function
+set.objfn(lp_game_player_one, c(0, 0, 0, 0, 0, 0, 1))
+
+# Add the constraints for player 1
+add.constraint(lp_game_player_one, c(0, 0, 0, -75, 75, 0, 1), "<=", 0)
+add.constraint(lp_game_player_one, c(0, 0, -75, 0, 0, 75, 1), "<=", 0)
+add.constraint(lp_game_player_one, c(0, 75, 0, 0, 0, -75, 1), "<=", 0)
+add.constraint(lp_game_player_one, c(75, 0, 0, 0, -75, 0, 1), "<=", 0)
+add.constraint(lp_game_player_one, c(-75, 0, 0, 75, 0, 0, 1), "<=", 0)
+add.constraint(lp_game_player_one, c(0, -75, 75, 0, 0, 0, 1), "<=", 0)
+add.constraint(lp_game_player_one, c(1, 1, 1, 1, 1, 1, 0), "=", 1)
+
+# Set boundary conditions
+set.bounds(lp_game_player_one, lower = c(0, 0, 0, 0, 0, 0, -Inf))
+
+RowNames <- c("Row1", "Row2", "Row3", "Row4", "Row5", "Row6", "Row 7")
+ColNames <- c("B1", "B2", "B3", "B4", "B5", "B6", "V")
+
+# Annotate names for rows and columns
+dimnames(lp_game_player_one) <- list(RowNames, ColNames)
+
+print("----------------------------------------------------------")
+print("Assessement 3 Question 3 Player One Game")
+
+# Solve the LP model
+solve(lp_game_player_one)
+
+get.objective(lp_game_player_one)
+
+get.variables(lp_game_player_one)
+
+get.constraints(lp_game_player_one)
+
+
+#############################
+# Player 2 Game 
+#############################
+
+library(lpSolveAPI)
+
+# Make the game model
+lp_game_player_two <- make.lp(0, 7)
+
+# Set the objective to maximize
+lp.control(lp_game_player_two, sense="maximize")
+
+# Set the objective function
+set.objfn(lp_game_player_two, c(0, 0, 0, 0, 0, 0, 1))
+
+# Add the constraints for player 1
+add.constraint(lp_game_player_two, c(0, 0, 0, 75, -75, 0, 1), "<=", 0)
+add.constraint(lp_game_player_two, c(0, 0, 75, 0, 0, -75, 1), "<=", 0)
+add.constraint(lp_game_player_two, c(0, -75, 0, 0, 0, 75, 1), "<=", 0)
+add.constraint(lp_game_player_two, c(-75, 0, 0, 0, 75, 0, 1), "<=", 0)
+add.constraint(lp_game_player_two, c(75, 0, 0, -75, 0, 0, 1), "<=", 0)
+add.constraint(lp_game_player_two, c(0, 75, -75, 0, 0, 0, 1), "<=", 0)
+add.constraint(lp_game_player_two, c(1, 1, 1, 1, 1, 1, 0), "=", 1)
+
+# Set boundary conditions
+set.bounds(lp_game_player_two, lower = c(0, 0, 0, 0, 0, 0, -Inf))
+
+RowNames <- c("Row1", "Row2", "Row3", "Row4", "Row5", "Row6", "Row 7")
+ColNames <- c("A1", "A2", "A3", "A4", "A5", "A6", "V")
+
+# Annotate names for rows and columns
+dimnames(lp_game_player_two) <- list(RowNames, ColNames)
+
+print("----------------------------------------------------------")
+print("Assessement 3 Question 3 Player Two Game")
+
+# Solve the LP model
+solve(lp_game_player_two)
+
+get.objective(lp_game_player_two)
+
+get.variables(lp_game_player_two)
+
+get.constraints(lp_game_player_two)
