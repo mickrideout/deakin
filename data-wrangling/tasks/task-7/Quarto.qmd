@@ -1,0 +1,481 @@
+---
+title: "Data Cleansing and Text Analysis Challenge - Task 7"
+format: pdf
+jupyter: python3
+---
+
+* Student Name: Michael Rideout
+* Student Number: 225065259
+* E-mail: s225065259@deakin.edu.au
+* Student Course Code: SIT731
+---
+
+## Introduction
+
+This report presents an analysis of the Data Science Stack Exchange community, investigating how this question and answer forum reflects the evolving field of data science. Stack Exchange communities provide vital community driven knowledge repositories where members share expertise, answer questions and solve problems. Through the analysis of the communities' data export, we an gain useful insights into trends, issues and common solutions faced by members of the community and the data science field in general.
+
+This investigation focuses on the following aspects....
+
+*** TODO
+
+
+## Data Preparation
+
+This section documents the process of downloading, extracting and transforming the Data Science Stack Exchange data export. The result will be the transformation of the xml feeds to csv feeds.
+
+### Download and Extraction
+Here we download the Data Science Stack Exchange from "https://archive.org/download/stackexchange/datascience.stackexchange.com.7z" if the file hasn't been downloaded already. Then the files are extracted, if they don't already exist.
+
+```{python}
+import os
+import requests
+!pip install py7zr
+import py7zr
+import pandas as pd
+import xml.etree.ElementTree as ET
+import csv
+import re
+
+```
+
+
+```{python}
+
+def download_file(url, output_path):
+  """
+    Check if output_path exists. If not download from url to output_path
+  """
+  if os.path.exists(output_path):
+      print(f"File '{output_path}' already exists. Skipping download.")
+      return
+
+  print(f"Downloading file from {url}...")
+  try:
+      response = requests.get(url, stream=True)
+      response.raise_for_status()
+        
+      with open(output_path, 'wb') as file:
+          for chunk in response.iter_content(chunk_size=8192):
+              file.write(chunk)
+      print(f"Download completed: {output_path}")
+  except requests.exceptions.RequestException as e:
+      print(f"Failed to download file: {e}")
+
+
+archive_file = "datascience.stackexchange.com.7z"
+download_file("https://archive.org/download/stackexchange/datascience.stackexchange.com.7z", archive_file)
+
+
+# Extract the files to current directory
+with py7zr.SevenZipFile(archive_file, 'r') as archive:
+    for file in archive.getnames():
+        if not os.path.exists(file):
+            print(f"Extracting {file}...")
+            archive.extract(targets=[file])
+            archive.reset()
+
+
+```
+## Reference
+
+## Conversion of XML to CSV
+
+Iterate through all XML files and convert them to CSV
+
+```{python}
+
+def convert_all_xml_files_to_csv():
+    """
+    Iterate through all files in the current working directory ending with '.xml' and transform them to csv files
+    """
+    for filename in os.listdir():
+        if filename.endswith('.xml'):
+            csv_filename = filename.replace('.xml', '.csv')
+            if os.path.exists(csv_filename):
+                print(f"CSV file '{csv_filename}' already exists. Skipping conversion.")
+                continue
+            print(f"Converting {filename} to CSV...")
+            tree = ET.parse(filename)
+            root = tree.getroot()
+            rows = root.findall('.//row')
+            if rows:
+                csv_data = []
+                for item in rows:
+                    row_data = {}
+                    for attr in item.attrib:
+                        row_data[attr] = item.attrib[attr]
+                    csv_data.append(row_data)
+                df = pd.DataFrame(csv_data)
+                df.to_csv(csv_filename, index=False)
+            else:
+                print(f"No <row> tags found in {filename}. Skipping conversion.")
+
+convert_all_xml_files_to_csv()
+
+```
+
+Load badges
+```{python}
+badges_df = pd.read_csv('Badges.csv')
+badges_df.head()
+```
+
+Load the comments
+```{python}
+comments_df = pd.read_csv('Comments.csv')
+comments_df.head()
+```
+
+Load the post history
+
+```{python}
+post_history_df = pd.read_csv('PostHistory.csv', low_memory=False)
+post_history_df.head()
+```
+
+Load the Post Links
+
+```{python}
+post_links_df = pd.read_csv('PostLinks.csv')
+post_links_df.head()
+```
+
+Load the Posts
+
+```{python}
+posts_df = pd.read_csv('Posts.csv')
+posts_df.head()
+```
+
+Load the Tags
+
+```{python}
+tags_df = pd.read_csv('Tags.csv')
+tags_df.head()
+```
+
+Load the Users
+
+```{python}
+users_df = pd.read_csv('Users.csv')
+users_df.head()
+```
+
+Load the Votes
+
+```{python}
+votes_df = pd.read_csv('Votes.csv')
+votes_df.head()
+```
+
+
+## Word cloud of most mentioned computer languages
+
+```{python}
+
+
+languages_df = pd.read_json('https://pldb.io/pldb.json')
+print(f"We have data on {len(languages_df)} computer languages")
+```
+
+```{python}
+
+# Define a function to clean the body text
+def clean_body_text(body_text, regex_pattern):
+    # Check if body_text is a string
+    if not isinstance(body_text, str):
+        return ''  # Return an empty string for non-string inputs
+
+    # Find all matches and join them with spaces
+    matches = re.findall(regex_pattern, body_text)
+    return ' '.join(matches)
+
+# Apply the cleaning function to the Body column
+languages_list = languages_df['name'].tolist()
+pattern = r'(?i)(?<=\s)(' + '|'.join(map(re.escape, languages_list)) + r')(?=\s)'
+all_text = posts_df['Body'].str.cat(sep=' ')
+#language_text = clean_body_text(all_text, pattern)
+
+
+```
+
+```{python}
+all_text
+```
+
+
+
+
+
+## TODO
+- World map of questions vs world map of answers
+- Word cloud of most mentioned languages
+- Word cloud of most mentioned libraries
+
+
+## Apendix 1 - Features for csv files
+
+### Posts
+
+Id1
+
+PostTypeId1 (listed in the PostTypes table)
+1 = Question
+2 = Answer
+3 = Orphaned tag wiki
+4 = Tag wiki excerpt
+5 = Tag wiki
+6 = Moderator nomination
+7 = "Wiki placeholder" (Appears to include auxiliary site content like the help center introduction, election description, and the tour page's introduction, ask, and don't ask sections)
+8 = Privilege wiki
+9 = Article
+10 = HelpArticle
+12 = Collection
+13 = ModeratorQuestionnaireResponse
+14 = Announcement
+15 = CollectiveDiscussion
+17 = CollectiveCollection
+
+AcceptedAnswerId (only present if PostTypeId = 1)
+
+ParentId1 (only present if PostTypeId = 2)
+
+CreationDate1
+
+DeletionDate1 (only non-null for the SEDE PostsWithDeleted table. Deleted posts are not present on Posts. Column not present on data dump.)
+
+Score1 (generally non-zero for only Questions, Answers, and Moderator Nominations)
+
+ViewCount (nullable)
+
+Body (as rendered HTML, not Markdown)
+
+OwnerUserId (only present if user has not been deleted; always -1 for tag wiki entries, i.e. the community user owns them)
+
+OwnerDisplayName (nullable)
+
+LastEditorUserId (nullable)
+
+LastEditorDisplayName (nullable)
+
+LastEditDate (e.g. 2009-03-05T22:28:34.823) - the date and time of the most recent edit to the post (nullable)
+
+LastActivityDate (e.g. 2009-03-11T12:51:01.480) - datetime of the post's most recent activity
+
+Title - question title (PostTypeId = 1), or on Stack Overflow, the tag name for some tag wikis and excerpts (PostTypeId = 4/5)
+
+Tags1 - question tags (PostTypeId = 1), or on Stack Overflow, the subject tag of some tag wikis and excerpts (PostTypeId = 4/5)
+
+AnswerCount - the number of undeleted answers (only present if PostTypeId = 1)
+
+CommentCount (nullable)
+
+FavoriteCount (nullable)
+
+ClosedDate1 (present only if the post is closed)
+
+CommunityOwnedDate (present only if post is community wiki'd)
+
+ContentLicense1
+
+### Users
+
+Id
+Reputation
+CreationDate
+DisplayName
+LastAccessDate (Datetime user last loaded a page; updated every 30 min at most)
+WebsiteUrl
+Location
+AboutMe
+Views (Number of times the profile is viewed)
+UpVotes (How many upvotes the user has cast)
+DownVotes
+ProfileImageUrl
+EmailHash (now always NULL, which means it won't appear as an attribute in the data dump XML)
+AccountId (User's Stack Exchange Network profile ID)
+
+### Comments
+
+Id
+PostId
+Score
+Text (Comment body)
+CreationDate
+UserDisplayName
+UserId (Optional. Absent if user has been deleted)
+ContentLicense
+
+### Badges
+
+Id
+
+UserId
+
+Name (Name of the badge)
+
+Date (e.g. 2008-09-15T08:55:03.923)
+
+Class
+1 = Gold
+2 = Silver
+3 = Bronze
+
+TagBased = True if badge is for a tag, otherwise it is a named badge
+
+### Tags
+
+Id
+TagName
+Count
+ExcerptPostId (nullable) Id of Post that holds the excerpt text of the tag
+WikiPostId (nullable) Id of Post that holds the wiki text of the tag
+IsModeratorOnly
+IsRequired
+
+
+### Post Links
+
+Id primary key
+CreationDate when the link was created
+PostId id of source post
+RelatedPostId id of target/related post
+LinkTypeId type of link
+1 = Linked (PostId contains a link to RelatedPostId)
+3 = Duplicate (PostId is a duplicate of RelatedPostId)
+
+
+### Post History
+
+Id
+PostHistoryTypeId (listed in the PostHistoryTypes table)
+1 = Initial Title - initial title (questions only)
+2 = Initial Body - initial post raw body text
+3 = Initial Tags - initial list of tags (questions only)
+4 = Edit Title - modified title (questions only)
+5 = Edit Body - modified post body (raw markdown)
+6 = Edit Tags - modified list of tags (questions only)
+7 = Rollback Title - reverted title (questions only)
+8 = Rollback Body - reverted body (raw markdown)
+9 = Rollback Tags - reverted list of tags (questions only)
+10 = Post Closed - post voted to be closed
+11 = Post Reopened - post voted to be reopened
+12 = Post Deleted - post voted to be removed
+13 = Post Undeleted - post voted to be restored
+14 = Post Locked - post locked by moderator
+15 = Post Unlocked - post unlocked by moderator
+16 = Community Owned - post now community owned
+17 = Post Migrated - post migrated - now replaced by 35/36 (away/here)
+18 = Question Merged - question merged with deleted question
+19 = Question Protected - question was protected by a moderator.
+20 = Question Unprotected - question was unprotected by a moderator.
+21 = Post Disassociated - OwnerUserId removed from post by admin
+22 = Question Unmerged - answers/votes restored to previously merged question
+24 = Suggested Edit Applied
+25 = Post Tweeted
+31 = Comment discussion moved to chat
+33 = Post notice added - comment contains foreign key to PostNotices
+34 = Post notice removed - comment contains foreign key to PostNotices
+35 = Post migrated away - replaces id 17
+36 = Post migrated here - replaces id 17
+37 = Post merge source
+38 = Post merge destination
+50 = Bumped by Community User
+52 = Question became hot network question (main) / Hot Meta question (meta)
+53 = Question removed from hot network/meta questions by a moderator
+66 = Created from Ask Wizard
+Additionally, in older dumps (all guesses, all seem no longer present in the wild):
+23 = Unknown dev related event
+26 = Vote nullification by dev (ERM?)
+27 = Post unmigrated/hidden moderator migration?
+28 = Unknown suggestion event
+29 = Unknown moderator event (possibly de-wikification?)
+30 = Unknown event (too rare to guess)
+
+PostId
+
+RevisionGUID: At times more than one type of history record can be recorded by a single action. All of these will be grouped using the same RevisionGUID
+
+CreationDate (e.g. 2009-03-05T22:28:34.823)
+
+UserId
+
+UserDisplayName: populated if a user has been removed and no longer referenced by user Id; also happens to the author of a migrated post
+
+Comment: This field will contain the comment made by the user who edited a post.
+
+If PostHistoryTypeId = 10, this field contains the CloseReasonId of the close reason (listed in CloseReasonTypes):
+Old close reasons:
+1 = Exact Duplicate
+2 = Off-topic
+3 = Subjective and argumentative
+4 = Not a real question
+7 = Too localized
+10 = General reference
+20 = Noise or pointless (Meta sites only)
+Current close reasons:
+101 = Duplicate
+102 = Off-topic
+103 = Unclear what you're asking
+104 = Too broad
+105 = Primarily opinion-based
+
+If PostHistoryTypeId in (33,34) this field contains the PostNoticeId of the PostNotice
+
+Text: A raw version of the new value for a given revision
+- If PostHistoryTypeId in (10,11,12,13,14,15,19,20,35) this column will contain a JSON encoded string with all users who have voted for the PostHistoryTypeId
+- If it is a duplicate close vote, the JSON string will contain an array of original questions as OriginalQuestionIds
+- If PostHistoryTypeId = 17 this column will contain migration details of either from <url> or to <url>
+
+ContentLicense
+
+### Votes
+
+Id
+
+PostId
+
+VoteTypeId (listed in the VoteTypes table - not all of these can actually appear in Data Explorer or the data dump, and some types - like the reactions, 17 & 22-28 - are currently only implemented in Stack Overflow for Teams)
+-1 = InformModerator
+0 = UndoMod
+1 = AcceptedByOriginator
+2 = UpMod (AKA upvote)
+3 = DownMod (AKA downvote)
+4 = Offensive
+5 = Favorite (AKA bookmark; UserId will also be populated) feature removed after October 2022 / replaced by Saves
+6 = Close (effective 2013-06-25: Close votes are only stored in table: PostHistory)
+7 = Reopen
+8 = BountyStart (UserId and BountyAmount will also be populated)
+9 = BountyClose (BountyAmount will also be populated)
+10 = Deletion
+11 = Undeletion
+12 = Spam
+15 = ModeratorReview (i.e., a moderator looking at a flagged post)
+16 = ApproveEditSuggestion
+17 = Reaction1 (Teams: celebrate)
+18 = Helpful
+19 = ThankYou (see Thank You reaction test)
+20 = WellWritten
+21 = Follow
+22 = Reaction2 (Teams: smile)
+23 = Reaction3 (Teams: mind blown)
+24 = Reaction4 (Teams: clap)
+25 = Reaction5 (Teams: heart)
+26 = Reaction6 (Teams: fire)
+27 = Reaction7 (Teams: trophy)
+28 = Reaction8 (Teams: wave)
+29 = Outdated (see Outdated Answers project)
+30 = NotOutdated
+31 = PreVote
+32 = CollectiveDiscussionUpvote
+33 = CollectiveDiscussionDownvote (no longer used)
+35 = privateAiAnswerCorrect (see Answer Bot experiment)
+36 = privateAiAnswerIncorrect
+37 = privateAiAnswerPartiallyCorrect
+
+UserId (present only if VoteTypeId in (5,8); -1 if user is deleted)
+
+CreationDate Date only (2018-07-31 00:00:00 time data is purposefully removed to protect user privacy)
+
+BountyAmount (present only if VoteTypeId in (8,9))
+
