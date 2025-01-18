@@ -35,6 +35,19 @@ import pandas as pd
 import xml.etree.ElementTree as ET
 import csv
 import re
+import matplotlib.pyplot as plt
+!pip install wordcloud
+from wordcloud import WordCloud
+from urllib.parse import urlparse
+import sys
+!{sys.executable} -m pip install spacy
+import spacy
+from geopy.geocoders import Nominatim
+
+
+%matplotlib inline
+
+
 
 ```
 
@@ -172,15 +185,6 @@ votes_df.head()
 ## Word cloud of most mentioned computer languages
 
 ```{python}
-
-
-languages_df = pd.read_json('https://pldb.io/pldb.json')
-print(f"We have data on {len(languages_df)} computer languages")
-```
-
-```{python}
-
-# Define a function to clean the body text
 def clean_body_text(body_text, regex_pattern):
     # Check if body_text is a string
     if not isinstance(body_text, str):
@@ -190,21 +194,290 @@ def clean_body_text(body_text, regex_pattern):
     matches = re.findall(regex_pattern, body_text)
     return ' '.join(matches)
 
-# Apply the cleaning function to the Body column
-languages_list = languages_df['name'].tolist()
-pattern = r'(?i)(?<=\s)(' + '|'.join(map(re.escape, languages_list)) + r')(?=\s)'
-all_text = posts_df['Body'].str.cat(sep=' ')
-#language_text = clean_body_text(all_text, pattern)
+def produce_word_cloud(regex_word_array, df: pd.DataFrame):
+    pattern = r'(?i)(?<=\s)(' + '|'.join(map(re.escape, regex_word_array)) + r')(?=\s)'
+    all_text = df['Body'].str.cat(sep=' ')
+    language_text = clean_body_text(all_text, pattern)
 
+    # Create a word frequency dictionary
+    word_freq = {}
+    for word in language_text.split():
+        word = word.lower()
+        if word in word_freq:
+            word_freq[word] += 1
+        else:
+            word_freq[word] = 1
+
+    # Display the word cloud
+    wordcloud = WordCloud(width=800, height=400, background_color='white').generate_from_frequencies(word_freq)
+    plt.figure(figsize=(10, 5))
+    plt.imshow(wordcloud, interpolation='bilinear')
+    plt.axis("off")
+    plt.show()
+
+    # print a table of the top 10 words and their frequency
+    print(pd.DataFrame(list(word_freq.items()), columns=['Word', 'Frequency']).nlargest(10, 'Frequency'))
+
+
+# Sourced from https://pypl.github.io/PYPL.html
+languages_list  = [
+    "Python", "Java", "JavaScript", "C#", "C/C++", "PHP", "R", "TypeScript",
+    "Swift", "Objective-C", "Kotlin", "Matlab", "VBA", "Rust", "Ruby",
+    "Ada", "Scala", "Dart", "Perl", "Lua", "Visual Basic", "Julia", "Haskell",
+    "Delphi/Object Pascal", "COBOL", "Shell", "PowerShell", "F#", "Assembly Language"
+]
+
+produce_word_cloud(languages_list, posts_df)
+```
+
+## Word cloud of python libraries
+
+```{python}
+# Python datascience libraries from chatgpt
+data_science_libraries = [
+    # General Purpose Libraries
+    "numpy",       # Numerical computing
+    "pandas",      # Data manipulation and analysis
+    "matplotlib",  # Data visualization
+    "seaborn",     # Statistical data visualization
+    "scipy",       # Scientific computing
+    "statsmodels", # Statistical modeling and testing
+
+    # Machine Learning Libraries
+    "scikit-learn",    # General-purpose machine learning
+    "xgboost",         # Gradient boosting for structured data
+    "lightgbm",        # Light Gradient Boosting Machine
+    "catboost",        # Categorical data boosting
+    "tensorflow",      # Deep learning
+    "keras",           # High-level API for TensorFlow
+    "pytorch",         # Deep learning
+    "fastai",          # High-level deep learning library
+    "h2o",             # Machine learning and AI platform
+
+    # Natural Language Processing Libraries
+    "nltk",            # Natural Language Toolkit
+    "spacy",           # Industrial-strength NLP
+    "gensim",          # Topic modeling and document similarity
+    "transformers",    # State-of-the-art NLP (Hugging Face)
+    "flair",           # Simple NLP library
+
+    # Data Visualization Libraries
+    "bokeh",           # Interactive visualizations
+    "plotly",          # Interactive and web-based plots
+    "altair",          # Declarative statistical visualization
+    "dash",            # Web-based data dashboards
+
+    # Data Handling and Transformation
+    "pyjanitor",       # Data cleaning and preprocessing
+    "pyarrow",         # In-memory columnar storage
+    "dask",            # Parallel computing and large datasets
+    "polars",          # Fast DataFrame library
+    "modin",           # Accelerated pandas
+
+    # Time Series Analysis
+    "tslearn",         # Time series machine learning
+    "prophet",         # Forecasting tool
+    "pmdarima",        # Auto ARIMA for time series
+    "statsforecast",   # Forecasting models
+
+    # Specialized Libraries
+    "cvxpy",           # Convex optimization
+    "pulp",            # Linear programming
+    "geopandas",       # Geospatial data analysis
+    "pyproj",          # Geospatial projections
+    "shapely",         # Geometric objects and operations
+
+    # Evaluation and Interpretation
+    "shap",            # Explain model predictions
+    "lime",            # Model interpretability
+    "yellowbrick",     # Model visualization
+
+    # Data Input/Output
+    "openpyxl",        # Excel file handling
+    "xlrd",            # Excel file handling
+    "pyodbc",          # Database connections
+    "sqlalchemy",      # SQL toolkit and ORM
+
+    # Distributed and Big Data Libraries
+    "pyspark",         # Apache Spark interface
+    "koalas",          # pandas API on Spark
+    "ray",             # Distributed computing
+
+    # Other Utilities
+    "missingno",       # Visualization for missing data
+    "skimage",         # Image processing
+    "Pillow",          # Image manipulation
+    "joblib",          # Parallel computing and job management
+    "cloudpickle",     # Serialization for distributed systems
+    "tqdm",            # Progress bars
+]
+
+produce_word_cloud(data_science_libraries, posts_df)
+
+```
+
+## Word cloud of R libraries
+
+```{python}
+# Source chatgpt
+r_data_science_libraries = [
+    # Data Manipulation
+    "dplyr", "data.table", "tidyr", "plyr", "reshape2", "readr", "tibble",
+    
+    # Visualization
+    "ggplot2", "lattice", "plotly", "shiny", "leaflet", "highcharter", 
+    "visNetwork", "ggvis", "ggforce", "esquisse",
+    
+    # Statistical Modeling
+    "stats", "lmtest", "sandwich", "caret", "lme4", "nlme", "randomForest",
+    "e1071", "MASS", "nnet", "forecast", "fable", "xgboost", "glmnet",
+    
+    # Machine Learning
+    "mlr3", "tidymodels", "caret", "e1071", "kernlab", "xgboost", 
+    "randomForest", "ranger", "lightgbm", "catboost", "gbm", 
+    "h2o", "tensorflow", "keras",
+    
+    # Time Series
+    "forecast", "fable", "tseries", "zoo", "xts", "lubridate",
+    
+    # Text Analysis
+    "tm", "quanteda", "tidytext", "text2vec", "RTextTools", "wordcloud",
+    
+    # Data Import/Export
+    "readr", "readxl", "openxlsx", "haven", "foreign", "jsonlite", 
+    "httr", "XML", "DBI", "RSQLite", "RODBC", "odbc",
+    
+    # Big Data
+    "sparklyr", "daskr", "bigmemory", "ff", "ffbase", "data.table",
+    
+    # Reporting and Dashboarding
+    "shiny", "flexdashboard", "rmarkdown", "knitr", "officer", 
+    "rmdformats", "pagedown",
+    
+    # Geospatial Analysis
+    "sf", "sp", "rgdal", "rgeos", "maptools", "leaflet", "tmap",
+    
+    # Bayesian Analysis
+    "rstan", "brms", "coda", "BayesFactor",
+    
+    # Bioinformatics
+    "Bioconductor", "Biobase", "GenomicRanges", "edgeR", "DESeq2",
+    
+    # Network Analysis
+    "igraph", "ggraph", "networkD3", "statnet", "sna",
+    
+    # Utilities and Miscellaneous
+    "magrittr", "stringr", "purrr", "lubridate", "glue", "forcats",
+    "Rcpp", "devtools", "usethis"
+]
+
+produce_word_cloud(r_data_science_libraries, posts_df)
+```
+
+## Create worldmaps
+
+```{python}
+# load spacy
+spacy.cli.download("en_core_web_sm")
+
+nlp = spacy.load('en_core_web_sm')
+geolocator = Nominatim(user_agent="myapp")
+```
+
+```{python}
+
+#Get the city and country for each user
+def get_user_location(row):
+    location_text = row['Location']
+    if not isinstance(location_text, str):
+        return None
+    doc = nlp(location_text)
+    found_location = None
+    for ent in doc.ents:
+        if ent.label_ == 'GPE':
+            found_location = ent.text
+    print(f"Searching: {location_text}, Found: {found_location}")
+    return found_location
+
+def geocode(row):
+    location = row['Location']
+    found_location = None
+    if not isinstance(location, str):
+        return None
+    try:
+        print(f"Searching: {location}")
+        found_location = geolocator.geocode(location)
+        if found_location:
+            # Get the country from the location
+            found_location = location.address.split(",")[-1].strip()
+            print(f"Searching: {location_text}, Found: {found_location}")
+            return found_location
+    except Exception as e:
+        print(f"Error geocoding {location}: {e}")
+        return None
+
+users_df.apply(geocode, axis=1)
+
+```
+
+## Most frequent external url links
+
+```{python}
+
+from urllib.parse import urlparse
+
+def extract_domains(urls):
+    try:
+        if isinstance(urls, str):
+            urls = [urls]
+        return [urlparse(url).netloc for url in urls if isinstance(url, str)]
+    except Exception as e:
+        return []
+
+
+
+# From posts_df['Body'] extract all urls
+url_pattern = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
+posts_df['urls'] = posts_df['Body'].str.findall(url_pattern)
+# for all the urls, extract the domain
+# remove any floats from post_df['urls']
+
+posts_df['domains'] = posts_df['urls'].apply(extract_domains)
+posts_df['domains'].value_counts()
+
+# flatten domain arrays to strings
+posts_df['domains'] = posts_df['domains'].apply(lambda x: ' '.join(x))
+
+# flatten all the domains
+domains_text = posts_df['domains'].str.cat(sep=' ')
+
+# regex to remove i.stack.imgur.com domain as this is just an image site
+domains_text = re.sub(r'i.stack.imgur.com', '', domains_text)
+
+# produce a domain frequency map
+    # Create a word frequency dictionary
+domain_freq = {}
+for domain in domains_text.split():
+    domain = domain.lower()
+    if domain in domain_freq:
+        domain_freq[domain] += 1
+    else:
+        domain_freq[domain] = 1
+
+# create a barplot of the top 10 domains
+domain_freq_df = pd.DataFrame(list(domain_freq.items()), columns=['Domain', 'Frequency']).nlargest(10, 'Frequency')
+domain_freq_df.plot.bar(x='Domain', y='Frequency', figsize=(10, 5))
+plt.title('Top 10 Most Frequently Referenced Domains')
+plt.ylabel('Reference Frequency')
+plt.xlabel('Domain')
+plt.show()
 
 ```
 
 ```{python}
-all_text
+posts_df.info()
+
 ```
-
-
-
 
 
 ## TODO
