@@ -12,38 +12,46 @@ jupyter: python3
 
 ## Introduction
 
-This report presents an analysis of the Data Science Stack Exchange community, investigating how this question and answer forum reflects the evolving field of data science. Stack Exchange communities provide vital community driven knowledge repositories where members share expertise, answer questions and solve problems. Through the analysis of the communities' data export, we an gain useful insights into trends, issues and common solutions faced by members of the community and the data science field in general.
+This report presents an analysis of the Data Science Stack Exchange [1] community, investigating how this question and answer forum reflects the evolving field of data science. Stack Exchange communities provide vital community driven knowledge repositories where members share expertise, answer questions and solve problems. Through the analysis of the communities' data export, we an gain useful insights into trends, issues and common solutions faced by members of the community and the data science field in general.
 
-This investigation focuses on the following aspects....
-
-*** TODO
-
+This investigation focuses on the following aspects:
+* Popularity of languages and tools
+* User engagement
+* User location analysis
 
 ## Data Preparation
 
 This section documents the process of downloading, extracting and transforming the Data Science Stack Exchange data export. The result will be the transformation of the xml feeds to csv feeds.
 
+The Data Science Stack Exchange data export at time of writing was produced on 7th April 2024. There are 137,433 users and 78,926 posts in the dataset.
+
 ### Download and Extraction
-Here we download the Data Science Stack Exchange from "https://archive.org/download/stackexchange/datascience.stackexchange.com.7z" if the file hasn't been downloaded already. Then the files are extracted, if they don't already exist.
+Here we download the Data Science Stack Exchange internet archive [2] if the file hasn't been downloaded already. Then the files are extracted, if they don't already exist.
 
 ```{python}
 import os
 import requests
+
 !pip install py7zr
 import py7zr
+
 import pandas as pd
 import xml.etree.ElementTree as ET
 import csv
 import re
 import matplotlib.pyplot as plt
+import plotly.express as px
+import tabulate
+
+
 !pip install wordcloud
 from wordcloud import WordCloud
 from urllib.parse import urlparse
 import sys
-!{sys.executable} -m pip install spacy
-import spacy
-from geopy.geocoders import Nominatim
 
+!pip install pycountry
+from pycountry import countries
+from difflib import get_close_matches
 
 %matplotlib inline
 
@@ -89,9 +97,8 @@ with py7zr.SevenZipFile(archive_file, 'r') as archive:
 
 
 ```
-## Reference
 
-## Conversion of XML to CSV
+### Conversion of XML to CSV
 
 Iterate through all XML files and convert them to CSV
 
@@ -126,6 +133,8 @@ def convert_all_xml_files_to_csv():
 convert_all_xml_files_to_csv()
 
 ```
+
+### Display of DataFrame Samples 
 
 Load badges
 ```{python}
@@ -182,43 +191,68 @@ votes_df.head()
 ```
 
 
-## Word cloud of most mentioned computer languages
+## Data Analysis
+
+This section analyses the Data Science Stack Exchange data with a focus on the topics raised in the introduction. We will refer to Data Science Stack Exchange as DSSE from hereon in.
+
+### Languages Used in Data Science
+
+The DSSE data presents an excellent opportunity to discover trends in the Data Science field.
+Here we investigate which computer languages are the most mentioned in DSSE posts. Regular expressions were employed to search posts for a set of predefined computer languages
 
 ```{python}
 def clean_body_text(body_text, regex_pattern):
-    # Check if body_text is a string
+    """
+    Remove all strings from 'body_text' except those that match 'regex_pattern'. 
+    Separate all matches with ' & '
+    """
+
     if not isinstance(body_text, str):
-        return ''  # Return an empty string for non-string inputs
-
-    # Find all matches and join them with spaces
+        return '' 
     matches = re.findall(regex_pattern, body_text)
-    return ' '.join(matches)
+    return ' & '.join(matches)
 
-def produce_word_cloud(regex_word_array, df: pd.DataFrame):
+def get_phrase_frequencies(regex_word_array, df: pd.DataFrame, post_year=None):
+    """
+    Search the Body column of the 'df' dataframe for anything matching 'regex_word_array'. 
+    Constrain the search to posts with the year 'post_year' if defined.
+    """
+    if post_year:
+        df = df[df['CreationDate'].str.contains(post_year)]
+    
     pattern = r'(?i)(?<=\s)(' + '|'.join(map(re.escape, regex_word_array)) + r')(?=\s)'
-    all_text = df['Body'].str.cat(sep=' ')
+    all_text = df['Body'].str.cat(sep=' & ')
     language_text = clean_body_text(all_text, pattern)
 
-    # Create a word frequency dictionary
-    word_freq = {}
-    for word in language_text.split():
-        word = word.lower()
-        if word in word_freq:
-            word_freq[word] += 1
+    phrase_freq = {}
+    for phrase in language_text.split(' & '):
+        phrase = phrase.lower()
+        if phrase in phrase_freq:
+            phrase_freq[phrase] += 1
         else:
-            word_freq[word] = 1
+            phrase_freq[phrase] = 1
+    return phrase_freq
+
+def produce_word_cloud(regex_word_array, df: pd.DataFrame, post_year=None):
+    """
+    Display a word cloud for posts.
+    """
+    phrase_frequencies = get_phrase_frequencies(regex_word_array, df, post_year)
 
     # Display the word cloud
-    wordcloud = WordCloud(width=800, height=400, background_color='white').generate_from_frequencies(word_freq)
+    wordcloud = WordCloud(width=800, height=400, background_color='white').generate_from_frequencies(phrase_frequencies)
     plt.figure(figsize=(10, 5))
     plt.imshow(wordcloud, interpolation='bilinear')
     plt.axis("off")
     plt.show()
 
-    # print a table of the top 10 words and their frequency
-    print(pd.DataFrame(list(word_freq.items()), columns=['Word', 'Frequency']).nlargest(10, 'Frequency'))
+    # print top 10
+    phrase_df = pd.DataFrame(list(phrase_frequencies.items()), columns=['Word', 'Frequency']).nlargest(10, 'Frequency')
+    phrase_df.set_index('Word', inplace=True)
+    print(tabulate.tabulate(phrase_df, headers='keys', tablefmt='psql'))
+```
 
-
+```{python}
 # Sourced from https://pypl.github.io/PYPL.html
 languages_list  = [
     "Python", "Java", "JavaScript", "C#", "C/C++", "PHP", "R", "TypeScript",
@@ -230,10 +264,14 @@ languages_list  = [
 produce_word_cloud(languages_list, posts_df)
 ```
 
-## Word cloud of python libraries
+It can be observed from this that Python and R and the two most mentioned computer languages. They far exceed the number of mentions attributed to the third most mentioned language, Java. This indicates that the field has coalesced around these two languages. 
+
+### Popular Python Libraries
+
+Python's popularity in Data Science can be attributed, in part, to its rich and varied ecosystem of libraries. The following word cloud and frequency table reveal exactly which python libraries are referenced most commonly in posts.
 
 ```{python}
-# Python datascience libraries from chatgpt
+# Python datascience libraries produced via generative AI
 data_science_libraries = [
     # General Purpose Libraries
     "numpy",       # Numerical computing
@@ -316,10 +354,14 @@ produce_word_cloud(data_science_libraries, posts_df)
 
 ```
 
-## Word cloud of R libraries
+The most popular libraries are a mix of libraries used for data manipulation purposes and machine learning model creation.
+
+### Popular R DataScience Libraries
+
+R is a popular choice in Data Science for statistical analysis and visualisation. The following word cloud and frequency table show which libraries are most referenced in posts.
 
 ```{python}
-# Source chatgpt
+# R library array produced via geneartive AI
 r_data_science_libraries = [
     # Data Manipulation
     "dplyr", "data.table", "tidyr", "plyr", "reshape2", "readr", "tibble",
@@ -374,381 +416,428 @@ r_data_science_libraries = [
 produce_word_cloud(r_data_science_libraries, posts_df)
 ```
 
-## Create worldmaps
+Whilst Python had quite a few libraries dedicated to data manipulation, R does not have the same in its most popular referred to library list. This is due to most of the data manipulation features being baked into the R language itself. The most popular R libraries were mostly machine learning model building libraries.
+
+### Popular Data Science Topics
+
+Arguably one of the most useful analyses that can be performed on stack exchange datasets is determining popular topics under discussion. Utilising a predefined list of data science topics, the most popular topics are discovered.
 
 ```{python}
-# load spacy
-spacy.cli.download("en_core_web_sm")
+# Topics list produced using generative AI
+data_science_topics = [
+    "Machine Learning", "Deep Learning", "Artificial Intelligence", "Neural Networks",
+    "Natural Language Processing", "Computer Vision", "Reinforcement Learning",
+    "Supervised Learning", "Unsupervised Learning", "Semi-Supervised Learning",
+    "Clustering", "Classification", "Regression", "Dimensionality Reduction",
+    "Feature Engineering", "Feature Selection", "Data Preprocessing", "Data Cleaning",
+    "Data Wrangling", "Data Visualization", "Exploratory Data Analysis", "Big Data",
+    "Data Mining", "Predictive Analytics", "Prescriptive Analytics", "Descriptive Analytics",
+    "Time Series Analysis", "Anomaly Detection", "Pattern Recognition", "Optimization",
+    "Hyperparameter Tuning", "Model Evaluation", "Cross-Validation", "Bias-Variance Tradeoff",
+    "Overfitting", "Underfitting", "Ensemble Learning", "Random Forests", "Gradient Boosting",
+    "XGBoost", "LightGBM", "CatBoost", "Support Vector Machines", "Decision Trees",
+    "K-Means Clustering", "Hierarchical Clustering", "Principal Component Analysis",
+    "t-SNE", "UMAP", "Autoencoders", "Generative Adversarial Networks", "Transfer Learning",
+    "Explainable AI", "Model Interpretability", "SHAP Values", "LIME", "A/B Testing",
+    "Hypothesis Testing", "Statistical Inference", "Bayesian Statistics", "Probability Theory",
+    "Linear Algebra", "Calculus", "Optimization Algorithms", "Gradient Descent",
+    "Stochastic Gradient Descent", "Adam Optimizer", "Backpropagation", "Convolutional Neural Networks",
+    "Recurrent Neural Networks", "Long Short-Term Memory", "Transformer", "BERT",
+    "GPT", "Attention Mechanisms", "Self-Supervised Learning", "Few-Shot Learning",
+    "Zero-Shot Learning", "Edge AI", "Federated Learning", "Quantum Machine Learning",
+    "Ethical AI", "AI Fairness", "Bias in AI", "Data Privacy", "GDPR Compliance",
+    "Data Governance", "Data Lakes", "Data Warehousing", "ETL Pipelines", "ELT Pipelines",
+    "Streaming Data", "Real-Time Analytics", "IoT Analytics", "Cloud Computing",
+    "AWS", "Google Cloud", "Azure", "Distributed Computing", "Apache Spark", "Hadoop",
+    "Kafka", "DataOps", "MLOps", "Model Deployment", "Model Monitoring", "Model Retraining",
+    "CI/CD for ML", "Data Pipelines", "Feature Stores", "Model Serving", "APIs for ML",
+    "RESTful APIs", "GraphQL", "Graph Databases", "Knowledge Graphs", "Ontology",
+    "Semantic Web", "Data Ethics", "Data Security", "Cybersecurity in AI", "Adversarial Attacks",
+    "Robust AI", "Causal Inference", "Counterfactual Analysis", "Experimental Design",
+    "Simulation", "Monte Carlo Methods", "Markov Chains", "Game Theory", "Reinforcement Learning in Games",
+    "Multi-Agent Systems", "Swarm Intelligence", "Evolutionary Algorithms", "Genetic Algorithms",
+    "Particle Swarm Optimization", "Simulated Annealing", "Bayesian Optimization",
+    "Active Learning", "Online Learning", "Incremental Learning", "Lifelong Learning",
+    "Meta-Learning", "Neural Architecture Search", "Automated Machine Learning",
+    "Data Labeling", "Crowdsourcing", "Data Annotation", "Synthetic Data", "Data Augmentation",
+    "Imbalanced Data", "Outlier Detection", "Missing Data Imputation", "Data Normalization",
+    "Data Standardization", "Data Transformation", "Data Integration", "Data Fusion",
+    "Data Lineage", "Data Catalog", "Data Quality", "Data Profiling", "Data Validation",
+    "Data Versioning", "Data Storytelling", "Business Intelligence", "Dashboarding",
+    "Geospatial Analysis", "Spatiotemporal Data", "Network Analysis", "Graph Theory",
+    "Social Network Analysis", "Recommendation Systems", "Collaborative Filtering",
+    "Content-Based Filtering", "Hybrid Recommenders", "Personalization", "Customer Segmentation",
+    "Churn Prediction", "Lifetime Value Prediction", "Sentiment Analysis", "Topic Modeling",
+    "Text Summarization", "Named Entity Recognition", "Speech Recognition", "OCR",
+    "Image Segmentation", "Object Detection", "Pose Estimation", "Style Transfer",
+    "Image Generation", "Video Analysis", "Audio Processing", "Time-to-Event Analysis",
+    "Survival Analysis", "Cohort Analysis", "A/B Testing", "Multi-Armed Bandits",
+    "Causal Impact", "Root Cause Analysis", "Data-Driven Decision Making", "Digital Transformation"
+]
 
-nlp = spacy.load('en_core_web_sm')
-geolocator = Nominatim(user_agent="myapp")
+produce_word_cloud(data_science_topics, posts_df)
+```
+
+The most discussed and used topics on DSSE are mostly topics have been part of the data science field for quite some time and show the prominence of these topcics in the field. Those topics include classification, regression, machine learning, clustering, neural networks, overfitting and optimisation. There is one topic that have come into the data science venacular only recently, that being deep learning. This is a testiment to its rise to importance.
+
+The topics of optimisation and cross validation also show the community's focus on improving model perfomance and reliability. 
+The inclusion of the clustering topic in the top 10 topics indicates that unsupervised methods attract a lot of attention.
+
+## Popular Data Science Topics by Year
+
+The top 10 data science topics of all time are interesting but they do not show temporal changes to the significance of data science topics. Producing an annual top 10 data science topics for each year between 2014 and 2023 will better allow use to view these changes. Analysising this change will provide an insight into the evolving focus of the field.
+
+
+```{python}
+# get topic phase frequecies from 2014 to 2023
+
+results = []
+
+for year in range(2013, 2024):
+    phrase_frequencies = get_phrase_frequencies(data_science_topics, posts_df, str(year))
+    year_results = [{'Year': year, 'Topic': topic, 'Frequency': frequency} for topic, frequency in phrase_frequencies.items()]
+    results.extend(year_results)
+results_df = pd.DataFrame(results)
+```
+
+
+```{python}
+
+years = sorted(results_df['Year'].unique())
+cumulative_frequencies = {}
+top_topics_per_year = {}
+
+for year in years:
+    top_topics = results_df[results_df['Year'] == year].nlargest(10, 'Frequency')['Topic'].tolist()
+    top_topics_per_year[year] = top_topics
+    cumulative_frequencies[year] = {topic: 0 for topic in top_topics}
+    bottom = 0
+    for topic in top_topics:
+        frequency = results_df[(results_df['Year'] == year) & (results_df['Topic'] == topic)]['Frequency'].sum()
+        cumulative_frequencies[year][topic] = frequency + bottom
+        bottom += frequency
+
+topic_colours = {
+    'classification': 'red',
+    'machine learning': 'blue',
+    'regression': 'green',
+    'hadoop': 'yellow',
+    'clustering': 'black',
+    'big data': 'cyan',
+    'data mining': 'magenta',
+    'optimization': 'orange',
+    'neural networks': 'purple',
+    'topic modeling': 'brown',
+    'deep learning': 'pink',
+    'supervised learning': 'grey',
+    'xgboost': 'lightblue',
+    'cross-validation': 'darkgreen',
+    'feature selection': 'navy',
+    'overfitting': 'salmon',
+    'gradient descent': 'gold',
+    'bert': 'lime',
+    'transformer': 'chocolate'
+}
+
+
+fig, ax = plt.subplots(figsize=(10, 6))
+
+for year in years:
+    bottom = 0
+    for topic in top_topics_per_year[year]:
+        if topic == '':
+            continue
+        ax.bar(year, cumulative_frequencies[year][topic] - bottom, label=topic, bottom=bottom, color=topic_colours[topic])
+        bottom = cumulative_frequencies[year][topic]
+
+ax.set_xlabel('Year')
+ax.set_ylabel('Topic Count')
+ax.set_title('Topic Distribution by Year (Top 10 Topics)')
+handles, labels = ax.get_legend_handles_labels()
+unique_labels = list(dict.fromkeys(labels))
+unique_handles = [handles[labels.index(label)] for label in unique_labels]
+ax.legend(unique_handles, unique_labels, bbox_to_anchor=(1.05, 1), loc='upper left')
+
+plt.tight_layout()
+plt.show()
+
+```
+
+From the Tag Distribution by Year (Top 10 Topics) we can see that the topics of classification, regression and machine learning dominate the discussions on DSSE consistently throughout the years. This observation aligns witht he central role these  methods play in data science applications. The rise of topics of deep learning and transformer in recent years illustrates the community's shift in discussions in response to technological advancements and emerging techniques. From 2020 onwards, BERT rose to prominence as a hot topic highlighting the field's advancements in Natural Language Processing (NLP).
+
+
+### New Users by Year
+
+DSSE has been an invaluable space for users to share knowledge and experience. In this section we would like to determine if the site's popularity has increased or decreased. The number of new users per year will allow us to see a trend in either direction.
+
+```{python}
+
+users_df['CreationDate'] = pd.to_datetime(users_df['CreationDate'])
+filtered_users_df = users_df[(users_df['CreationDate'].dt.year >= 2015) & (users_df['CreationDate'].dt.year <= 2023)]
+new_users_by_year = filtered_users_df.groupby(filtered_users_df['CreationDate'].dt.year)['AccountId'].nunique()
+
+new_users_by_year.plot(kind='bar', figsize=(10, 6))
+plt.xlabel('Year')
+plt.ylabel('Number of New Users')
+plt.title('New Users by Year')
+plt.show()
+```
+
+The bar chart of New Users by Year demonstrates the growth trajectory of the DSSE community. Between 2015 and 2020, the number of new users increased significantly, indicating hightened interest in data science. However from 2020 onwards there is a stark decline in growth in the number of new users. We will investigate this further.
+
+## Number of Posts by Year
+
+As there was a decline in the number of new users from 2020 onwards, we would like to know if there was a decline in user engagement as well. User engagement can be determined from the number of posts users are making over a certain period of time. We will analyse the post count per year to resolve this question. 
+
+```{python}
+posts_df['CreationDate'] = pd.to_datetime(posts_df['CreationDate'])
+filtered_posts_df = posts_df[(posts_df['CreationDate'].dt.year >= 2015) & (posts_df['CreationDate'].dt.year <= 2023)]
+posts_by_year = filtered_posts_df.groupby(filtered_posts_df['CreationDate'].dt.year).size()
+
+
+# Combine the number of new posts and new users by year
+combined_data = pd.concat([posts_by_year, new_users_by_year], axis=1)
+combined_data.columns = ['Number of Posts', 'Number of New Users']
+
+combined_data.plot(kind='bar', figsize=(10, 6))
+plt.xlabel('Year')
+plt.ylabel('Count')
+plt.title('Number of New Posts and New Users by Year')
+plt.legend()
+plt.show()
+```
+
+In the bar chart Number of New Posts and New Users by Year, the number of new posts was clearly increasing from 2015 to 2019 and then clearnly declines from 2020 onwards. This is an identical declining trend in new posts as there is in new users, both starting in 2020. There have been many theories postulated for this decline ranging from competing educational platforms to behavioural changes during the COVID pandemic. One theory backed by research [3] is that the introduction of Large Language Models, beginning with OpenAI's ChatGPT in 2022, have further increased the decline in user engagement in question and answering platforms as these models often provide accurate answers to question in less time that is required to search Q&A platforms.
+
+### World User Count HeatMap
+
+As DSSE has undergone a period of decline, segmentation analysis of its user population would be useful. One analysis that may be prudent is to understand the geographical dispersion of users.
+
+```{python}
+
+def resolve_country_abbreviation(text):
+    """
+    Convert common country abbreviations to their full official names.
+        Input - text (str): Input text containing country abbreviations
+        Returns - str: Text with abbreviations replaced by full country names
+    """
+    country_abbreviations = {
+        'UK': 'United Kingdom',
+        'GB': 'United Kingdom',
+        'US': 'United States',
+        'USA': 'United States',
+        'UAE': 'United Arab Emirates',
+        'KSA': 'Saudi Arabia',
+        'RSA': 'South Africa',
+        'PRC': 'China',
+        'ROK': 'South Korea',
+        'DPRK': 'North Korea',
+        'NZ': 'New Zealand',
+        'UAE': 'United Arab Emirates',
+        'KSA': 'Saudi Arabia',
+        'RSA': 'South Africa',
+    }
+    
+    def replace_abbreviation(match):
+        """Helper function to handle case-sensitive replacement"""
+        abbr = match.group(0)
+        if abbr in country_abbreviations:
+            return country_abbreviations[abbr]
+        upper_abbr = abbr.upper()
+        if upper_abbr in country_abbreviations:
+            return country_abbreviations[upper_abbr]
+        return abbr
+
+    pattern = r'\b(' + '|'.join(map(re.escape, country_abbreviations.keys())) + r')\b'
+    result = re.sub(pattern, replace_abbreviation, text, flags=re.IGNORECASE)  
+    return result
+
+
+def extract_countries(text):
+    """
+    Extract country names from a given text string using regular expressions.
+        Inputs - text (str): Input text to search for country names
+        Returns - str: First country name found in the text (in its proper case), or None if no match
+    """
+    countries = {
+        'Afghanistan', 'Albania', 'Algeria', 'Andorra', 'Angola', 'Antigua and Barbuda',
+        'Argentina', 'Armenia', 'Australia', 'Austria', 'Azerbaijan', 'Bahamas', 'Bahrain',
+        'Bangladesh', 'Barbados', 'Belarus', 'Belgium', 'Belize', 'Benin', 'Bhutan',
+        'Bolivia', 'Bosnia and Herzegovina', 'Botswana', 'Brazil', 'Brunei', 'Bulgaria',
+        'Burkina Faso', 'Burundi', 'Cabo Verde', 'Cambodia', 'Cameroon', 'Canada',
+        'Central African Republic', 'Chad', 'Chile', 'China', 'Colombia', 'Comoros',
+        'Congo', 'Costa Rica', 'Croatia', 'Cuba', 'Cyprus', 'Czech Republic', 'Denmark',
+        'Djibouti', 'Dominica', 'Dominican Republic', 'Ecuador', 'Egypt', 'El Salvador',
+        'Equatorial Guinea', 'Eritrea', 'Estonia', 'Eswatini', 'Ethiopia', 'Fiji',
+        'Finland', 'France', 'Gabon', 'Gambia', 'Georgia', 'Germany', 'Ghana', 'Greece',
+        'Grenada', 'Guatemala', 'Guinea', 'Guinea-Bissau', 'Guyana', 'Haiti', 'Honduras',
+        'Hungary', 'Iceland', 'India', 'Indonesia', 'Iran', 'Iraq', 'Ireland', 'Israel',
+        'Italy', 'Jamaica', 'Japan', 'Jordan', 'Kazakhstan', 'Kenya', 'Kiribati',
+        'Kuwait', 'Kyrgyzstan', 'Laos', 'Latvia', 'Lebanon', 'Lesotho', 'Liberia',
+        'Libya', 'Liechtenstein', 'Lithuania', 'Luxembourg', 'Madagascar', 'Malawi',
+        'Malaysia', 'Maldives', 'Mali', 'Malta', 'Marshall Islands', 'Mauritania',
+        'Mauritius', 'Mexico', 'Micronesia', 'Moldova', 'Monaco', 'Mongolia',
+        'Montenegro', 'Morocco', 'Mozambique', 'Myanmar', 'Namibia', 'Nauru', 'Nepal',
+        'Netherlands', 'New Zealand', 'Nicaragua', 'Niger', 'Nigeria', 'North Korea',
+        'North Macedonia', 'Norway', 'Oman', 'Pakistan', 'Palau', 'Palestine', 'Panama',
+        'Papua New Guinea', 'Paraguay', 'Peru', 'Philippines', 'Poland', 'Portugal',
+        'Qatar', 'Romania', 'Russia', 'Rwanda', 'Saint Kitts and Nevis', 'Saint Lucia',
+        'Saint Vincent and the Grenadines', 'Samoa', 'San Marino', 'Sao Tome and Principe',
+        'Saudi Arabia', 'Senegal', 'Serbia', 'Seychelles', 'Sierra Leone', 'Singapore',
+        'Slovakia', 'Slovenia', 'Solomon Islands', 'Somalia', 'South Africa', 'South Korea',
+        'South Sudan', 'Spain', 'Sri Lanka', 'Sudan', 'Suriname', 'Sweden', 'Switzerland',
+        'Syria', 'Taiwan', 'Tajikistan', 'Tanzania', 'Thailand', 'Timor-Leste', 'Togo',
+        'Tonga', 'Trinidad and Tobago', 'Tunisia', 'Turkey', 'Turkmenistan', 'Tuvalu',
+        'Uganda', 'Ukraine', 'United Arab Emirates', 'United Kingdom', 'United States',
+        'Uruguay', 'Uzbekistan', 'Vanuatu', 'Vatican City', 'Venezuela', 'Vietnam',
+        'Yemen', 'Zambia', 'Zimbabwe'
+    }
+    
+    pattern = r'\b(' + '|'.join(countries) + r')\b'
+    match = re.search(pattern, text, flags=re.IGNORECASE)
+    
+    if match:
+        return match.group(0)
+    else:
+        return None
+
+def country_to_iso3(country_name):
+    """
+    Convert a country name to its ISO alpha 3 code.
+        Input - country_name - The full country name
+        Returns - str: Three-letter ISO code if found, None if not found        
+    """
+    try:
+        country = countries.get(name=country_name)
+        if country:
+            return country.alpha_3
+        country = countries.search_fuzzy(country_name)
+        if country:
+            return country[0].alpha_3
+        country_names = [country.name for country in countries]
+        matches = get_close_matches(country_name, country_names, n=1, cutoff=0.6)
+        
+        if matches:
+            country = countries.get(name=matches[0])
+            return country.alpha_3
+            
+        return None
+        
+    except (AttributeError, LookupError):
+        return None
 ```
 
 ```{python}
 
 #Get the city and country for each user
-def get_user_location(row):
-    location_text = row['Location']
+def get_user_country(location_text):
     if not isinstance(location_text, str):
         return None
-    doc = nlp(location_text)
-    found_location = None
-    for ent in doc.ents:
-        if ent.label_ == 'GPE':
-            found_location = ent.text
-    print(f"Searching: {location_text}, Found: {found_location}")
-    return found_location
-
-def geocode(row):
-    location = row['Location']
-    found_location = None
-    if not isinstance(location, str):
-        return None
-    try:
-        print(f"Searching: {location}")
-        found_location = geolocator.geocode(location)
-        if found_location:
-            # Get the country from the location
-            found_location = location.address.split(",")[-1].strip()
-            print(f"Searching: {location_text}, Found: {found_location}")
-            return found_location
-    except Exception as e:
-        print(f"Error geocoding {location}: {e}")
-        return None
-
-users_df.apply(geocode, axis=1)
-
-```
-
-## Most frequent external url links
-
-```{python}
-
-from urllib.parse import urlparse
-
-def extract_domains(urls):
-    try:
-        if isinstance(urls, str):
-            urls = [urls]
-        return [urlparse(url).netloc for url in urls if isinstance(url, str)]
-    except Exception as e:
-        return []
+    location_text = resolve_country_abbreviation(location_text)
+    return extract_countries(location_text)
 
 
+users_df['Country'] = users_df['Location'].apply(get_user_country)
 
-# From posts_df['Body'] extract all urls
-url_pattern = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'
-posts_df['urls'] = posts_df['Body'].str.findall(url_pattern)
-# for all the urls, extract the domain
-# remove any floats from post_df['urls']
-
-posts_df['domains'] = posts_df['urls'].apply(extract_domains)
-posts_df['domains'].value_counts()
-
-# flatten domain arrays to strings
-posts_df['domains'] = posts_df['domains'].apply(lambda x: ' '.join(x))
-
-# flatten all the domains
-domains_text = posts_df['domains'].str.cat(sep=' ')
-
-# regex to remove i.stack.imgur.com domain as this is just an image site
-domains_text = re.sub(r'i.stack.imgur.com', '', domains_text)
-
-# produce a domain frequency map
-    # Create a word frequency dictionary
-domain_freq = {}
-for domain in domains_text.split():
-    domain = domain.lower()
-    if domain in domain_freq:
-        domain_freq[domain] += 1
-    else:
-        domain_freq[domain] = 1
-
-# create a barplot of the top 10 domains
-domain_freq_df = pd.DataFrame(list(domain_freq.items()), columns=['Domain', 'Frequency']).nlargest(10, 'Frequency')
-domain_freq_df.plot.bar(x='Domain', y='Frequency', figsize=(10, 5))
-plt.title('Top 10 Most Frequently Referenced Domains')
-plt.ylabel('Reference Frequency')
-plt.xlabel('Domain')
+top_countries = users_df['Country'].value_counts().nlargest(20)
+top_countries.plot.bar(figsize=(10, 5))
+plt.title('Top 20 Countries by User')
+plt.xlabel('Country')
+plt.ylabel('Number of Users')
 plt.show()
 
 ```
 
-```{python}
-posts_df.info()
 
+```{python}
+
+# Count users per country
+users_df['Country'] = users_df['Country'].str.lower()
+user_counts = users_df['Country'].value_counts().reset_index()
+
+
+user_counts.columns = ['Country', 'Users']
+user_counts['Iso'] = user_counts['Country'].apply(country_to_iso3)
+user_counts.reset_index()
+user_counts.dropna(inplace=True)
+
+
+fig = px.choropleth(user_counts, locations="Iso",
+                    color="Users", # lifeExp is a column of gapminder
+                    hover_name="Country", # column to add to hover information
+                    color_continuous_scale=px.colors.sequential.Plasma[::-1])
+
+fig.update_layout(title_text='World Map of User Count by Country')
+
+                    
+fig.show()
 ```
 
+The Top 20 Countries by User shows that most users on the platform originate from India and the United States. These absolute numbers may not portray the full picture of how popular the DSSE platform is within a nation. It is more likely just a reflection of the nations that have the greatest populations.
 
-## TODO
-- World map of questions vs world map of answers
-- Word cloud of most mentioned languages
-- Word cloud of most mentioned libraries
+### World User HeatMap by Population Proportion
 
+A more useful measure of the popularity of the DSSE platform within a nation to take the user count as percentage of population. This will allow us to identify which nations the platform is most popular and to compare those nations for any similarities.
 
-## Apendix 1 - Features for csv files
+```{python}
 
-### Posts
 
-Id1
+world_bank_data = {
+    "Country": [
+        "ABW","AFE","AFG","AFW","AGO","ALB","AND","ARB","ARE","ARG","ARM","ASM","ATG","AUS","AUT","AZE","BDI","BEL","BEN","BFA","BGD","BGR","BHR","BHS","BIH","BLR","BLZ","BMU","BOL","BRA","BRB","BRN","BTN","BWA","CAF","CAN","CEB","CHE","CHI","CHL","CHN","CIV","CMR","COD","COG","COL","COM","CPV","CRI","CSS","CUB","CUW","CYM","CYP","CZE","DEU","DJI","DMA","DNK","DOM","DZA","EAP","EAR","EAS","ECA","ECS","ECU","EGY","EMU","ERI","ESP","EST","ETH","EUU","FCS","FIN","FJI","FRA","FRO","FSM","GAB","GBR","GEO","GHA","GIB","GIN","GMB","GNB","GNQ","GRC","GRD","GRL","GTM","GUM","GUY","HIC","HKG","HND","HPC","HRV","HTI","HUN","IBD","IBT","IDA","IDB","IDN","IDX","IMN","IND","INX","IRL","IRN","IRQ","ISL","ISR","ITA","JAM","JOR","JPN","KAZ","KEN","KGZ","KHM","KIR","KNA","KOR","KWT","LAC","LAO","LBN","LBR","LBY","LCA","LCN","LDC","LIC","LIE","LKA","LMC","LMY","LSO","LTE","LTU","LUX","LVA","MAC","MAF","MAR","MCO","MDA","MDG","MDV","MEA","MEX","MHL","MIC","MKD","MLI","MLT","MMR","MNA","MNE","MNG","MNP","MOZ","MRT","MUS","MWI","MYS","NAC","NAM","NCL","NER","NGA","NIC","NLD","NOR","NPL","NRU","NZL","OED","OMN","OSS","PAK","PAN","PER","PHL","PLW","PNG","POL","PRE","PRI","PRK","PRT","PRY","PSE","PSS","PST","PYF","QAT","ROU","RUS","RWA","SAS","SAU","SDN","SEN","SGP","SLB","SLE","SLV","SMR","SOM","SRB","SSA","SSD","SSF","SST","STP","SUR","SVK","SVN","SWE","SWZ","SXM","SYC","SYR","TCA","TCD","TEA","TEC","TGO","THA","TJK","TKM","TLA","TLS","TMN","TON","TSA","TSS","TTO","TUN","TUR","TUV","TZA","UGA","UKR","UMC","URY","USA","UZB","VCT","VEN","VGB","VIR","VNM","VUT","WLD","WSM","XKX","YEM","ZAF","ZMB","ZWE"
+    ],
+    "Population": [
+        107359,750503764,41454761,509398589,36749906,2745972,80856,481667539,10483751,45538401,2990900,47521,93316,26658948,9131761,10153958,13689450,11787423,14111034,23025776,171466990,6446596,1577059,399440,3185073,9178298,411106,64698,12244159,211140729,282336,458949,786385,2480244,5152421,40097761,100175859,8888093,167691,19658835,1410710000,31165654,28372687,105789731,6182885,52321152,850387,522331,5105525,3152394,11019931,147862,73038,1344976,10864042,83280000,1152944,66510,5946952,11331265,46164219,2137527754,3511076811,2384463611,249146208,924969865,17980083,114535772,349670802,3470390,48347910,1370286,128691692,448804042,1058789534,5583911,924145,68287487,54482,112630,2484789,68350000,3715483,33787914,38471,14405468,2697845,2153339,1847549,10405588,117081,56865,18124838,166506,826353,1400465513,7536100,10644851,917304254,3859686,11637398,9592186,4952574126,6858957145,1906383019,633230238,281190067,1273152781,84165,1438069596,0,5307600,90608707,45074049,393349,9756600,58993475,2839786,11439213,124516650,20330104,55339003,7099750,17423880,132530,46758,51712619,4853420,594995068,7664993,5773493,5493031,7305659,179285,657611624,1161055545,736466395,39850,22037000,3079778780,6633109634,2311472,2326658047,2871585,666430,1877445,678800,27515,37712505,38956,2457783,31195932,525994,508311359,129739759,38827,5896643239,1827816,23769127,552747,54133798,440118189,616177,3481145,45143,33635160,5022441,1261041,21104482,35126298,375077354,2963095,289870,26159867,227882945,6823613,17877117,5519594,29694614,11875,5223100,1385723403,5049269,14411921,247504495,4458759,33845617,114891199,17727,10389635,36687353,1078224044,3205691,26418204,10578174,6844146,5165775,2689224,1119236161,281118,2656032,19059479,143826130,13954471,1951539835,33264292,50042791,18077573,5917648,800005,8460512,6309624,33860,18358615,6623183,1259782580,11483374,1259902353,20253539,230871,628886,5426740,2120461,10536632,1230506,42749,119773,23594623,46198,19319064,2111139152,459025452,9304337,71702435,10389799,7364438,642397939,1384286,434952414,104597,1951539835,1259902353,1367510,12200431,85325965,9816,66617606,48656601,37732836,2816864459,3388081,334914895,35652307,101323,28300854,38985,104917,100352192,320409,8061876001,216663,1756366,39390799,63212384,20723965,16340822
+    ]
+}
 
-PostTypeId1 (listed in the PostTypes table)
-1 = Question
-2 = Answer
-3 = Orphaned tag wiki
-4 = Tag wiki excerpt
-5 = Tag wiki
-6 = Moderator nomination
-7 = "Wiki placeholder" (Appears to include auxiliary site content like the help center introduction, election description, and the tour page's introduction, ask, and don't ask sections)
-8 = Privilege wiki
-9 = Article
-10 = HelpArticle
-12 = Collection
-13 = ModeratorQuestionnaireResponse
-14 = Announcement
-15 = CollectiveDiscussion
-17 = CollectiveCollection
+population_data = pd.DataFrame(world_bank_data)
 
-AcceptedAnswerId (only present if PostTypeId = 1)
+merged_data = pd.merge(user_counts, population_data, left_on='Iso', right_on='Country')
 
-ParentId1 (only present if PostTypeId = 2)
+merged_data['UserPercentage'] = merged_data['Users'] / merged_data['Population'] * 100
 
-CreationDate1
+# Top 20 Countries by User Count as Percentage of Population
+top_countries = merged_data.nlargest(20, 'UserPercentage')[['Country_x', 'UserPercentage']]
+top_countries.plot.bar(x='Country_x', y='UserPercentage', figsize=(10, 5))
+plt.title('Top 20 Countries by User Count as Percentage of the Population')
+plt.xlabel('Country')
+plt.ylabel('UserCount as Percentage of the Population')
+plt.show()
 
-DeletionDate1 (only non-null for the SEDE PostsWithDeleted table. Deleted posts are not present on Posts. Column not present on data dump.)
+```
+```{python}
+# Draw heatmap
+fig = px.choropleth(merged_data, locations="Iso",
+                    color="UserPercentage",
+                    hover_name="Country_x",
+                    color_continuous_scale=px.colors.sequential.Plasma[::-1])
 
-Score1 (generally non-zero for only Questions, Answers, and Moderator Nominations)
+fig.update_layout(title_text='World Map of User Count as Percentage of the Population')
 
-ViewCount (nullable)
+fig.show()
+```
 
-Body (as rendered HTML, not Markdown)
+The heatmap and bar chart of user count as a percentage of the population shows an interesting trend about engagement of smaller nations with the DSSE platform. Countries with smaller populations, such as Leichtenstein, Tuvalu and Monoco, show a disproportionately high user engagement relative to their size. This indicates a significant penetration of data science discuessions and platforms into these regions which may stem from higher internet connectivity or a focus on technology in education. Countries like Singapore standout in this regard as they are know to show a stong emphasis on data science and technolgoy within their education system. With only one exeception (Tuvalu), all counties that have a high user engagement relative to the total population are developed nations.
 
-OwnerUserId (only present if user has not been deleted; always -1 for tag wiki entries, i.e. the community user owns them)
+Although it has the highest numbers of users on the platform, India's user count a a percentage of the total population is ranked towards the lower end of the spectrum when compared to other nations. This shows that the importance of using the correct measure when determining metrics like user engagement and popularity.
 
-OwnerDisplayName (nullable)
+## Privacy and Ethical Considerations
 
-LastEditorUserId (nullable)
+This investigation has analyse data that involves data about people and as such, is subject to privacy and ethical concerns. A privacy concern is the potential for exposure of personal information. This analysis contains user locations, which could potentially be used to identify individuals, especially in smaller countries or regions (Tuvala is a good example of this). User creation dates and activity patterns could be potentially used to de-anonymise users when combined with other data.
+An ethical concern about the analysis is the bias in overrepresentation of developed nations. Language barriers may exclude non-English speaksers as DSSE is primarily English based.
 
-LastEditorDisplayName (nullable)
+## Conclusion
 
-LastEditDate (e.g. 2009-03-05T22:28:34.823) - the date and time of the most recent edit to the post (nullable)
+This analysis of the DSSE platform highlights several significant insights into the global data science community. The trends observed in the lanauge usage and library preferences show the domincance of Python and R as programming languages of choice in this field.
 
-LastActivityDate (e.g. 2009-03-11T12:51:01.480) - datetime of the post's most recent activity
+A decline in the DSSE platform was observed from 2020 onwards. Whilst many external factors may be at play in this, further analysis and investigation would be prudent to determine what exactly those factors are and why they occured. 
 
-Title - question title (PostTypeId = 1), or on Stack Overflow, the tag name for some tag wikis and excerpts (PostTypeId = 4/5)
+The global reach of the DSSE platform was also investigated. Whilst user from India and the United States dominate the platform in absolute terms, as a proportion to their populations, they are not the most represented. Nations that are highly developed are most present and represented on the platform.
 
-Tags1 - question tags (PostTypeId = 1), or on Stack Overflow, the subject tag of some tag wikis and excerpts (PostTypeId = 4/5)
+The evolution and consistency of data science topics was also investigated. Fundamental concepts like classification and regression have consistently been discussed throughout time, whereas new topics like deep learning and transforms become very important and highly discussed issues in a short space of time. This represents the dynamic and evolving nature of the data science field.
 
-AnswerCount - the number of undeleted answers (only present if PostTypeId = 1)
-
-CommentCount (nullable)
-
-FavoriteCount (nullable)
-
-ClosedDate1 (present only if the post is closed)
-
-CommunityOwnedDate (present only if post is community wiki'd)
-
-ContentLicense1
-
-### Users
-
-Id
-Reputation
-CreationDate
-DisplayName
-LastAccessDate (Datetime user last loaded a page; updated every 30 min at most)
-WebsiteUrl
-Location
-AboutMe
-Views (Number of times the profile is viewed)
-UpVotes (How many upvotes the user has cast)
-DownVotes
-ProfileImageUrl
-EmailHash (now always NULL, which means it won't appear as an attribute in the data dump XML)
-AccountId (User's Stack Exchange Network profile ID)
-
-### Comments
-
-Id
-PostId
-Score
-Text (Comment body)
-CreationDate
-UserDisplayName
-UserId (Optional. Absent if user has been deleted)
-ContentLicense
-
-### Badges
-
-Id
-
-UserId
-
-Name (Name of the badge)
-
-Date (e.g. 2008-09-15T08:55:03.923)
-
-Class
-1 = Gold
-2 = Silver
-3 = Bronze
-
-TagBased = True if badge is for a tag, otherwise it is a named badge
-
-### Tags
-
-Id
-TagName
-Count
-ExcerptPostId (nullable) Id of Post that holds the excerpt text of the tag
-WikiPostId (nullable) Id of Post that holds the wiki text of the tag
-IsModeratorOnly
-IsRequired
-
-
-### Post Links
-
-Id primary key
-CreationDate when the link was created
-PostId id of source post
-RelatedPostId id of target/related post
-LinkTypeId type of link
-1 = Linked (PostId contains a link to RelatedPostId)
-3 = Duplicate (PostId is a duplicate of RelatedPostId)
-
-
-### Post History
-
-Id
-PostHistoryTypeId (listed in the PostHistoryTypes table)
-1 = Initial Title - initial title (questions only)
-2 = Initial Body - initial post raw body text
-3 = Initial Tags - initial list of tags (questions only)
-4 = Edit Title - modified title (questions only)
-5 = Edit Body - modified post body (raw markdown)
-6 = Edit Tags - modified list of tags (questions only)
-7 = Rollback Title - reverted title (questions only)
-8 = Rollback Body - reverted body (raw markdown)
-9 = Rollback Tags - reverted list of tags (questions only)
-10 = Post Closed - post voted to be closed
-11 = Post Reopened - post voted to be reopened
-12 = Post Deleted - post voted to be removed
-13 = Post Undeleted - post voted to be restored
-14 = Post Locked - post locked by moderator
-15 = Post Unlocked - post unlocked by moderator
-16 = Community Owned - post now community owned
-17 = Post Migrated - post migrated - now replaced by 35/36 (away/here)
-18 = Question Merged - question merged with deleted question
-19 = Question Protected - question was protected by a moderator.
-20 = Question Unprotected - question was unprotected by a moderator.
-21 = Post Disassociated - OwnerUserId removed from post by admin
-22 = Question Unmerged - answers/votes restored to previously merged question
-24 = Suggested Edit Applied
-25 = Post Tweeted
-31 = Comment discussion moved to chat
-33 = Post notice added - comment contains foreign key to PostNotices
-34 = Post notice removed - comment contains foreign key to PostNotices
-35 = Post migrated away - replaces id 17
-36 = Post migrated here - replaces id 17
-37 = Post merge source
-38 = Post merge destination
-50 = Bumped by Community User
-52 = Question became hot network question (main) / Hot Meta question (meta)
-53 = Question removed from hot network/meta questions by a moderator
-66 = Created from Ask Wizard
-Additionally, in older dumps (all guesses, all seem no longer present in the wild):
-23 = Unknown dev related event
-26 = Vote nullification by dev (ERM?)
-27 = Post unmigrated/hidden moderator migration?
-28 = Unknown suggestion event
-29 = Unknown moderator event (possibly de-wikification?)
-30 = Unknown event (too rare to guess)
-
-PostId
-
-RevisionGUID: At times more than one type of history record can be recorded by a single action. All of these will be grouped using the same RevisionGUID
-
-CreationDate (e.g. 2009-03-05T22:28:34.823)
-
-UserId
-
-UserDisplayName: populated if a user has been removed and no longer referenced by user Id; also happens to the author of a migrated post
-
-Comment: This field will contain the comment made by the user who edited a post.
-
-If PostHistoryTypeId = 10, this field contains the CloseReasonId of the close reason (listed in CloseReasonTypes):
-Old close reasons:
-1 = Exact Duplicate
-2 = Off-topic
-3 = Subjective and argumentative
-4 = Not a real question
-7 = Too localized
-10 = General reference
-20 = Noise or pointless (Meta sites only)
-Current close reasons:
-101 = Duplicate
-102 = Off-topic
-103 = Unclear what you're asking
-104 = Too broad
-105 = Primarily opinion-based
-
-If PostHistoryTypeId in (33,34) this field contains the PostNoticeId of the PostNotice
-
-Text: A raw version of the new value for a given revision
-- If PostHistoryTypeId in (10,11,12,13,14,15,19,20,35) this column will contain a JSON encoded string with all users who have voted for the PostHistoryTypeId
-- If it is a duplicate close vote, the JSON string will contain an array of original questions as OriginalQuestionIds
-- If PostHistoryTypeId = 17 this column will contain migration details of either from <url> or to <url>
-
-ContentLicense
-
-### Votes
-
-Id
-
-PostId
-
-VoteTypeId (listed in the VoteTypes table - not all of these can actually appear in Data Explorer or the data dump, and some types - like the reactions, 17 & 22-28 - are currently only implemented in Stack Overflow for Teams)
--1 = InformModerator
-0 = UndoMod
-1 = AcceptedByOriginator
-2 = UpMod (AKA upvote)
-3 = DownMod (AKA downvote)
-4 = Offensive
-5 = Favorite (AKA bookmark; UserId will also be populated) feature removed after October 2022 / replaced by Saves
-6 = Close (effective 2013-06-25: Close votes are only stored in table: PostHistory)
-7 = Reopen
-8 = BountyStart (UserId and BountyAmount will also be populated)
-9 = BountyClose (BountyAmount will also be populated)
-10 = Deletion
-11 = Undeletion
-12 = Spam
-15 = ModeratorReview (i.e., a moderator looking at a flagged post)
-16 = ApproveEditSuggestion
-17 = Reaction1 (Teams: celebrate)
-18 = Helpful
-19 = ThankYou (see Thank You reaction test)
-20 = WellWritten
-21 = Follow
-22 = Reaction2 (Teams: smile)
-23 = Reaction3 (Teams: mind blown)
-24 = Reaction4 (Teams: clap)
-25 = Reaction5 (Teams: heart)
-26 = Reaction6 (Teams: fire)
-27 = Reaction7 (Teams: trophy)
-28 = Reaction8 (Teams: wave)
-29 = Outdated (see Outdated Answers project)
-30 = NotOutdated
-31 = PreVote
-32 = CollectiveDiscussionUpvote
-33 = CollectiveDiscussionDownvote (no longer used)
-35 = privateAiAnswerCorrect (see Answer Bot experiment)
-36 = privateAiAnswerIncorrect
-37 = privateAiAnswerPartiallyCorrect
-
-UserId (present only if VoteTypeId in (5,8); -1 if user is deleted)
-
-CreationDate Date only (2018-07-31 00:00:00 time data is purposefully removed to protect user privacy)
-
-BountyAmount (present only if VoteTypeId in (8,9))
-
+## Reference
+1. Stack Exchange. (n.d.). Data Science Stack Exchange. Retrieved January 26, 2025, from https://datascience.stackexchange.com/
+2. Internet Archive. (n.d.). Stack Exchange: Data Science [Data set]. Retrieved January 26, 2025, from https://archive.org/download/stackexchange/datascience.stackexchange.com.7z
+3. del Rio-Chanona, M., Laurentsyeva, N., & Wachs, J. (2023). Are large language models a threat to digital public goods? Evidence from activity on Stack Overflow. arXiv. https://arxiv.org/abs/2307.07367
