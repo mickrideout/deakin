@@ -1,0 +1,92 @@
+-
+- ### Task Plan
+	- Your task is to create a plan in the file 'TASK.md'. In order to create this task plan, iterate over the following task specifications, understand the tasks and generate a plan.
+	- **Task Specification**
+		- Generate a python file 'auto-ml.py'. All following task will edit this file. The python file should have jupyter annotations so that code blocks begin with '# %%' and all markdown sections begin with '# %% [markdown]'
+		- The objective is to produce a data science model comparison
+		- Use British spelling
+		- Do not add many comments to the code
+		- Load into a pandas dataframe the file Dataset3.csv
+		- The dataset has the following structure:
+		  collapsed:: true
+			-
+			  ```
+			  Dataset dimensions: (4424, 37)
+			  <class 'pandas.core.frame.DataFrame'>
+			  RangeIndex: 4424 entries, 0 to 4423
+			  Data columns (total 37 columns):
+			   #   Column                                          Non-Null Count  Dtype  
+			  ---  ------                                          --------------  -----  
+			   0   Marital status                                  4424 non-null   int64  
+			   1   Application mode                                4424 non-null   int64  
+			   2   Application order                               4424 non-null   int64  
+			   3   Course                                          4424 non-null   int64  
+			   4   Daytime/evening attendance	                     4424 non-null   int64  
+			   5   Previous qualification                          4424 non-null   int64  
+			   6   Previous qualification (grade)                  4424 non-null   float64
+			   7   Nacionality                                     4424 non-null   int64  
+			   8   Mother's qualification                          4424 non-null   int64  
+			   9   Father's qualification                          4424 non-null   int64  
+			   10  Mother's occupation                             4424 non-null   int64  
+			   11  Father's occupation                             4424 non-null   int64  
+			   12  Admission grade                                 4424 non-null   float64
+			   13  Displaced                                       4424 non-null   int64  
+			   14  Educational special needs                       4424 non-null   int64  
+			   15  Debtor                                          4424 non-null   int64  
+			   16  Tuition fees up to date                         4424 non-null   int64  
+			   17  Gender                                          4424 non-null   int64  
+			   18  Scholarship holder                              4424 non-null   int64  
+			   19  Age at enrollment                               4424 non-null   int64  
+			   20  International                                   4424 non-null   int64  
+			   21  Curricular units 1st sem (credited)             4424 non-null   int64  
+			   22  Curricular units 1st sem (enrolled)             4424 non-null   int64  
+			   23  Curricular units 1st sem (evaluations)          4424 non-null   int64  
+			   24  Curricular units 1st sem (approved)             4424 non-null   int64  
+			   25  Curricular units 1st sem (grade)                4424 non-null   float64
+			   26  Curricular units 1st sem (without evaluations)  4424 non-null   int64  
+			   27  Curricular units 2nd sem (credited)             4424 non-null   int64  
+			   28  Curricular units 2nd sem (enrolled)             4424 non-null   int64  
+			   29  Curricular units 2nd sem (evaluations)          4424 non-null   int64  
+			   30  Curricular units 2nd sem (approved)             4424 non-null   int64  
+			   31  Curricular units 2nd sem (grade)                4424 non-null   float64
+			   32  Curricular units 2nd sem (without evaluations)  4424 non-null   int64  
+			   33  Unemployment rate                               4424 non-null   float64
+			   34  Inflation rate                                  4424 non-null   float64
+			   35  GDP                                             4424 non-null   float64
+			   36  Target                                          4424 non-null   object 
+			  dtypes: float64(7), int64(29), object(1)
+			  memory usage: 1.2+ MB
+			  ```
+		- The target features is the column called 'Target'
+		- Perform the following preprocessing steps
+		  collapsed:: true
+			- Remove any rows where 'target' has the value 'nan'
+			- Drop any rows where 'target' is missing
+			- Count the number of class in the target feature
+			- Print the value count for each target class
+			- Check for missing values
+			- Handle missing values
+			- Scale features using StandardScaler
+			- Plot the distribution of the target feature
+			- Use SMOTE to handle class imbalance of the target
+			- Perform feature selection, limit to top 20 best features
+			- Plot a correlation matrix
+			- Encode the target variable to be a scalar using sklearn LabelEncoder. Replace the df['target'] with the encoded value
+			- Calculate all correlations with the target and visualise top correlations
+			- Split the dataset into train / test splits with test size of 0.2
+		- For all model evaluations use AUC and F1 score
+		- Perform the following Steps in order. Add markdown to highlight the group name
+			- **Task Set 1**
+				- Print the dimensions of the dataset.
+				- Apply PCA on the dataset and select the first three components except "Target". Print the dimensions of modified dataset and visualise the data using appropriate plotting tool/s.
+			- **Task Set 2**
+				- Create at least three SVM models to classify “graduation”, “dropout”, and “enrolled” students based on given information. Use the same train-test split and performance metrics for all models. Report on the performances and the used model hyper-parameters.
+			- **Task Set 4**
+				- Repeat the same classification task done in Task Set 2 using KNN (build two models). Use the same data splitting and performance metrics that you have used in Task Set 2. Report the performance and  compare results with the findings of Task Set 2
+			- **Task Set 5**
+				- Create two more KNN-based classification models by varying distance metrics. Report
+				  distance metrics on performances of KNN models. Explain the necessity of tuning  
+				  distance metrics during KNN model development with respect to your findings.  
+		-
+		-
+		-
