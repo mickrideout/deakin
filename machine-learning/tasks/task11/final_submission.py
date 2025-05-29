@@ -65,6 +65,8 @@ df['glucose'] = df['glucose'].fillna(df['glucose'].mode()[0])
 # %% [markdown]
 # Although not stated, impute the missing values for numerical columns with median and categorical columns with mode.
 # The logics is that columns not used will be dropped anyhow
+
+# %%
 numerical_columns = df.select_dtypes(include=['float64', 'int64']).columns
 for col in numerical_columns:
     df[col] = df[col].fillna(df[col].median())
@@ -291,6 +293,7 @@ def train_and_evaluate_model(model, X_train, X_test, y_train, y_test, model_name
 # Default values were used for the models as there was no information on the parameters used by the authors.
 # Random seed of 42 is used to ensure reproducibility.
 
+# 
 models = {
     'XGB': XGBClassifier(random_state=42, tree_method='hist'),
     'RF': RandomForestClassifier(random_state=42),
@@ -767,7 +770,7 @@ X_train, X_test, y_train, y_test = train_test_split(
 # Here we implement the AutoGluon model, if a model doesnt already exist on disk. After training, the model is saved to disk.
 
 
-# AutoGluon model implementation
+# %%
 model_path = 'autogluon_heart_disease_model'
 train_data = pd.concat([X_train, pd.Series(y_train, name='TenYearCHD')], axis=1)
 
@@ -786,7 +789,8 @@ else:
         presets='best_quality',
         time_limit=600,
         num_bag_folds=5,
-        num_stack_levels=2
+        num_stack_levels=2,
+        random_seed=42
     )
     print("Model saved to:", model_path)
 
@@ -800,7 +804,6 @@ y_pred_proba = predictor.predict_proba(X_test)[1]
 
 
 # %%
-
 paper_results = {
     'Accuracy': 94.14,
     'Precision': 94.25,
