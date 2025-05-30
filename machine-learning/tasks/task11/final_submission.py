@@ -293,7 +293,7 @@ def train_and_evaluate_model(model, X_train, X_test, y_train, y_test, model_name
 # Default values were used for the models as there was no information on the parameters used by the authors.
 # Random seed of 42 is used to ensure reproducibility.
 
-# 
+# %%
 models = {
     'XGB': XGBClassifier(random_state=42, tree_method='hist'),
     'RF': RandomForestClassifier(random_state=42),
